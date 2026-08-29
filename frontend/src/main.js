@@ -1,26 +1,29 @@
 import { createApp } from "vue";
-import { createRouter, createWebHistory } from "vue-router";
-import AiAssistant from "./pages/AiAssistant.vue";
-
+import { createPinia } from "pinia";
 import App from "./App.vue";
-import Home from "./pages/Home.vue";
-import Login from "./pages/Login.vue";
-import Register from "./pages/Register.vue";
-import Favorites from "./pages/Favorites.vue";
-import Positions from "./pages/Positions.vue";
+import router from "./router";
+import { onUnauthorized } from "./api/client";
+import { useAuthStore } from "./stores/auth";
+import { toast } from "./composables/useToast";
 
-const routes = [
-  { path: "/", component: Home },
-  { path: "/login", component: Login },
-  { path: "/register", component: Register },
-  { path: "/favorites", component: Favorites },
-  { path: "/positions", component: Positions },
-  { path: "/ai", component: AiAssistant },
-];
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
 
-const router = createRouter({
-  history: createWebHistory(),
-  routes
+const app = createApp(App);
+const pinia = createPinia();
+
+app.use(pinia);
+app.use(router);
+
+// 401 统一处理:清除会话并跳转登录
+onUnauthorized(() => {
+  const auth = useAuthStore(pinia);
+  if (auth.isLoggedIn) {
+    auth.logout();
+    toast.error("登录已过期,请重新登录");
+    router.push({ name: "login" });
+  }
 });
 
-createApp(App).use(router).mount("#app");
+app.mount("#app");

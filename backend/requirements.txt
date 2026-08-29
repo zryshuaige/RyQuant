@@ -1,0 +1,7 @@
+Django>=4.2,<5.0
+djangorestframework>=3.15,<4.0
+django-cors-headers>=4.4
+requests>=2.31          # seed_demo 抓取真实历史日 K(腾讯/网易源);缺失时自动回退模拟数据
+
+# 可选:配置 DEEPSEEK_API_KEY 后,AI 助手将调用真实大模型;未安装/未配置时自动降级为离线模拟回答
+openai>=1.40

@@ -1,0 +1,69 @@
+/* 基础层:重置 / 背景 / 排版 / 滚动条 */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; min-height: 100%; }
+
+body {
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 极光背景:两团缓慢漂移的径向光晕 + 细网格 */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(52rem 30rem at 12% -8%, var(--aurora-1), transparent 60%),
+    radial-gradient(46rem 28rem at 88% 4%, var(--aurora-2), transparent 62%),
+    radial-gradient(38rem 26rem at 55% 108%, var(--aurora-3), transparent 60%),
+    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  animation: aurora-drift 22s var(--ease-out) infinite alternate;
+}
+.aurora-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(72rem 46rem at 50% 0%, rgba(0,0,0,0.9), transparent 75%);
+}
+@keyframes aurora-drift {
+  from { filter: hue-rotate(0deg) brightness(1); }
+  to   { filter: hue-rotate(18deg) brightness(1.12); }
+}
+
+::selection { background: rgba(139, 92, 246, 0.45); color: #fff; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 144, 196, 0.25);
+  border-radius: 8px;
+  border: 2px solid var(--bg-0);
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(124, 144, 196, 0.45); }
+
+a { color: var(--brand-a); text-decoration: none; transition: color 0.2s; }
+a:hover { color: var(--brand-b); }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: 0.01em; }
+
+:focus-visible {
+  outline: 2px solid var(--brand-a);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button, input, select, textarea { font-family: inherit; font-size: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

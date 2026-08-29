@@ -1,0 +1,46 @@
+from django.db import models
+
+from .stock import Stock
+
+
+class Candle(models.Model):
+    """K 线(由行情模拟器聚合维护),供图表与量化回测共用。"""
+
+    class Period(models.TextChoices):
+        MINUTE = "1min", "分钟"
+        DAY = "1day", "日线"
+
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE, related_name="candles")
+    period = models.CharField("周期", max_length=8, choices=Period.choices)
+    time = models.DateTimeField("时间")  # 分钟线为分钟起点;日线为当日 00:00(本地)
+    open = models.DecimalField("开盘", max_digits=12, decimal_places=2)
+    high = models.DecimalField("最高", max_digits=12, decimal_places=2)
+    low = models.DecimalField("最低", max_digits=12, decimal_places=2)
+    close = models.DecimalField("收盘", max_digits=12, decimal_places=2)
+    volume = models.BigIntegerField("成交量", default=0)
+
+    class Meta:
+        unique_together = ("stock", "period", "time")
+        ordering = ["time"]
+        verbose_name = "K线"
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f"{self.stock.symbol} {self.period} {self.time:%Y-%m-%d %H:%M} C:{self.close}"
+
+
+class NewsItem(models.Model):
+    """资讯(种子数据,可在 admin 维护)。"""
+
+    title = models.CharField("标题", max_length=200)
+    summary = models.TextField("摘要", blank=True, default="")
+    source = models.CharField("来源", max_length=64, default="模拟财经")
+    published_at = models.DateTimeField("发布时间")
+
+    class Meta:
+        ordering = ["-published_at"]
+        verbose_name = "资讯"
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return self.title
