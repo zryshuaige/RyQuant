@@ -52,7 +52,7 @@ def fetch_real_daily_tencent(symbol: str, count: int = HISTORY_BARS):
         result = []
         for r in rows:
             o, c, h, l = _to_decimal(r[1]), _to_decimal(r[2]), _to_decimal(r[3]), _to_decimal(r[4])
-            vol = int(float(r[5])) if len(r) > 5 and r[5] else 0
+            vol = int(float(r[5])) * 100 if len(r) > 5 and r[5] else 0  # 手 → 股,与实时 tick 口径一致
             if None in (o, c, h, l) or c <= 0:
                 continue
             result.append((str(r[0]), o, c, h, l, vol))

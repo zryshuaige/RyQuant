@@ -26,6 +26,7 @@ PCT_TOLERANCE = Decimal("0.05")  # 报告涨跌幅与现价/昨收推算值的�
 
 _thread = None
 _last_refresh_date = None
+_prev_quote_volume = {}  # 真实报价当日累计量缓存,用于分钟增量
 
 
 def _minute_start(dt):
@@ -93,7 +94,7 @@ def fetch_realtime_quotes(symbols):
 
 
 def _update_candle(stock, now, price: Decimal, volume: int, period: str, bucket,
-                   high=None, low=None, source=Candle.Source.SIM) -> None:
+                   high=None, low=None, source=Candle.Source.SIM, volume_total=False) -> None:
     candle, created = Candle.objects.get_or_create(
         stock=stock, period=period, time=bucket,
         defaults={"open": price, "high": high or price, "low": low or price,
@@ -103,7 +104,8 @@ def _update_candle(stock, now, price: Decimal, volume: int, period: str, bucket,
         candle.high = max(candle.high, high or price)
         candle.low = min(candle.low, low or price)
         candle.close = price
-        candle.volume += volume
+        # 真实报价的量是当日累计值→覆盖;模拟/分钟增量→累加
+        candle.volume = volume if volume_total else candle.volume + volume
         candle.source = source
         candle.save(update_fields=["high", "low", "close", "volume", "source"])
 
@@ -124,12 +126,15 @@ def _tick_stock(stock: Stock, now) -> None:
 
 @transaction.atomic
 def _tick_stock_real(stock: Stock, now, quote) -> None:
-    """真实报价 tick:现价/昨收/高低/量均来自腾讯,驱动撮合。"""
+    """真实报价 tick:现价/昨收/高低来自腾讯;日量=当日累计覆盖,分钟量=相邻 tick 增量。"""
     stock.prev_close = quote["prev_close"]
     stock.quote_source = Stock.QuoteSource.REAL
     stock.real_quote_at = now
     new_price = min(max(quote["current"], stock.limit_down), stock.limit_up)
-    _apply_price(stock, now, new_price, quote["volume"], quote["high"], quote["low"])
+    prev = _prev_quote_volume.get(stock.symbol, 0)
+    delta = max(quote["volume"] - prev, 0)
+    _prev_quote_volume[stock.symbol] = quote["volume"]
+    _apply_price(stock, now, new_price, delta, quote["high"], quote["low"], volume_total=quote["volume"])
 
 
 @transaction.atomic
@@ -141,7 +146,12 @@ def _tick_index(stock: Stock, now, quote) -> None:
             stock.prev_close = quote["prev_close"]
         stock.quote_source = Stock.QuoteSource.REAL
         stock.real_quote_at = now
-        volume, high, low = quote["volume"], quote["high"], quote["low"]
+        prev = _prev_quote_volume.get(stock.symbol, 0)
+        delta = max(quote["volume"] - prev, 0)
+        _prev_quote_volume[stock.symbol] = quote["volume"]
+        volume, high, low = delta, quote["high"], quote["low"]
+        _apply_price(stock, now, new_price, volume, high, low, volume_total=quote["volume"])
+        return
     else:
         pct = random.uniform(-TICK_VOLATILITY * 0.6, TICK_VOLATILITY * 0.6)
         new_price = (stock.price * Decimal(str(1 + pct))).quantize(TWO_PLACES, ROUND_HALF_UP)
@@ -153,13 +163,16 @@ def _tick_index(stock: Stock, now, quote) -> None:
     _apply_price(stock, now, new_price, volume, high, low)
 
 
-def _apply_price(stock: Stock, now, new_price: Decimal, volume: int, high=None, low=None) -> None:
-    """更新价格 → 聚合分钟/日 K。撮合由股票路径单独调用。"""
+def _apply_price(stock: Stock, now, new_price: Decimal, volume: int, high=None, low=None,
+                 volume_total=None) -> None:
+    """更新价格 → 聚合分钟/日 K。volume 为分钟增量;volume_total 非 None 时作为当日累计量覆盖日 K。"""
     stock.price = new_price
     stock.save(update_fields=["price", "prev_close", "quote_source", "real_quote_at", "updated_at"])
     source = stock.quote_source
     _update_candle(stock, now, new_price, volume, Candle.Period.MINUTE, _minute_start(now), high, low, source)
-    _update_candle(stock, now, new_price, volume, Candle.Period.DAY, _day_start(now), high, low, source)
+    day_volume = volume_total if volume_total is not None else volume
+    _update_candle(stock, now, new_price, day_volume, Candle.Period.DAY, _day_start(now),
+                   high, low, source, volume_total=volume_total is not None)
 
 
 def _parse_day(date_str):

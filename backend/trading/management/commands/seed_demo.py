@@ -193,8 +193,11 @@ class Command(BaseCommand):
                 user=demo, stock=Stock.objects.get(symbol=symbol),
             )
             if fav_created:
-                fav.created_at = now - timedelta(days=days_ago)
+                joined = now - timedelta(days=days_ago)
+                while joined.weekday() >= 5:  # 吸附到交易日,K 线标注可见
+                    joined -= timedelta(days=1)
+                fav.created_at = joined
                 fav.save(update_fields=["created_at"])
-        self.stdout.write(f"  + 演示自选 {len(DEMO_FAVORITES)} 只(加入日期已回填)")
+        self.stdout.write(f"  + 演示自选 {len(DEMO_FAVORITES)} 只(新建时加入日期回填到过去)")
 
         self.stdout.write(self.style.SUCCESS("演示数据就绪:python manage.py runserver 后访问前端即可体验"))

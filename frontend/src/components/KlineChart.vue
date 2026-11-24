@@ -138,19 +138,21 @@ function buildOption(data) {
       },
     ],
   };
-  // 自选加入日期标注:金色虚线 markLine + 加入后区间底色 markArea(日线且日期在可视窗口内)
-  if (favDate.value && timestamps.includes(favDate.value)) {
+  // 自选加入日期标注:金色虚线 markLine + 加入后区间底色 markArea
+  // 加入日若为周末/节假日或早于可视窗口,吸附到其后首个交易日,保证标注始终可见
+  const markDate = favDate.value ? timestamps.find((t) => t >= favDate.value) : null;
+  if (markDate) {
     const last = timestamps[timestamps.length - 1];
     option.series[0].markLine = {
       symbol: ["none", "none"], silent: true,
       lineStyle: { color: c.gold, width: 2, type: "dashed" },
-      label: { formatter: `加入自选 ${favDate.value}`, color: c.gold, fontSize: 11, position: "insideEndTop" },
-      data: [{ xAxis: favDate.value }],
+      label: { formatter: `加入自选 ${favDate.value}`, color: c.gold, fontSize: 11, position: "insideEndTop", rotate: 0 },
+      data: [{ xAxis: markDate }],
     };
     option.series[0].markArea = {
       silent: true,
       itemStyle: { color: c.gold + "1f" },
-      data: [[{ xAxis: favDate.value }, { xAxis: last }]],
+      data: [[{ xAxis: markDate }, { xAxis: last }]],
     };
   }
   return option;
@@ -158,11 +160,12 @@ function buildOption(data) {
 
 async function load() {
   if (!props.symbol) return;
+  const requested = props.symbol;
   loading.value = true;
   error.value = "";
   try {
-    const data = await fetchKline({ symbol: props.symbol, limit: props.limit });
-    if (disposed) return;
+    const data = await fetchKline({ symbol: requested, limit: props.limit });
+    if (disposed || props.symbol !== requested) return;  // 丢弃过期响应,防竞态覆盖
     lastData.value = data;
     render();
   } catch (e) {
@@ -184,6 +187,7 @@ function render() {
 
 watch(() => props.symbol, load);
 watch(theme, render); // 主题切换重绘
+watch(favDate, render); // 自选加载晚于首绘时补画加入日期标注
 
 onMounted(() => {
   load();

@@ -15,7 +15,8 @@ const route = useRoute();
 
 const selected = ref(null);
 const search = ref("");
-const klineTarget = ref({ symbol: "sh000001", name: "上证指数" }); // 默认看上证指数
+// 深链 ?symbol= 同步初始化,避免默认指数与目标标的两次请求竞态
+const klineTarget = ref({ symbol: String(route.query.symbol || "") || "sh000001", name: "" });
 
 const pulse = ref(null); // 市场脉冲(60s 刷新,服务端亦有 TTL 缓存)
 let pulseTimer = null;
@@ -48,16 +49,17 @@ onMounted(async () => {
   if (auth.isLoggedIn && !market.favorites.length) {
     market.fetchFavorites().catch(() => {});  // K 线自选日期标注依赖
   }
-  // 支持从自选页带 ?symbol= 跳转直达 K 线
+  // 补全深链标的名称;无深链时默认上证指数
   const qs = String(route.query.symbol || "");
   const target = market.activeStocks.find((s) => s.symbol === qs)
     || market.indices.find((i) => i.symbol === qs);
   if (target) {
     klineTarget.value = { symbol: target.symbol, name: target.name };
     if (target.kind !== "index") selected.value = target;
-  } else if (!selected.value && market.activeStocks.length) {
-    selected.value = market.activeStocks[0];
+  } else if (klineTarget.value.symbol === "sh000001") {
+    klineTarget.value = { symbol: "sh000001", name: "上证指数" };
   }
+  if (!selected.value && market.activeStocks.length) selected.value = market.activeStocks[0];
   loadPulse();
   pulseTimer = setInterval(loadPulse, 60000);
 });

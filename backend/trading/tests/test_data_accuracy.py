@@ -59,6 +59,20 @@ class QuoteParserTests(SimpleTestCase):
             self.assertEqual(market_sim.fetch_realtime_quotes(["600519"]), {})
 
 
+class TencentDailyVolumeTests(SimpleTestCase):
+    def test_daily_volume_normalized_to_shares(self):
+        from trading.services import market_data
+
+        payload = {"data": {"sh600519": {"qfqday": [
+            ["2026-11-20", "1400", "1420", "1430", "1390", "30000"],
+        ]}}}
+        resp = mock.Mock()
+        resp.json.return_value = payload
+        with mock.patch("requests.get", return_value=resp):
+            rows = market_data.fetch_real_daily_tencent("600519", count=1)
+        self.assertEqual(rows[0][5], 3000000)  # 手 → 股,与实时 tick 量纲一致
+
+
 class RealTickTests(BaseAPITestCase):
     def tearDown(self):
         market_sim._last_refresh_date = None

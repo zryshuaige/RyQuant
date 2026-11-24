@@ -1,4 +1,6 @@
 """全链路冒烟:登录→行情/来源→市场脉冲+策略推荐→自选(加入日期)→回测→策略对比→AI"""
+import time
+
 import requests
 
 BASE = "http://127.0.0.1:8080/api"
@@ -83,10 +85,11 @@ check("AI 问答(离线降级)", r.status_code == 200 and len(r.json()["answer"]
 r = s.post(f"{BASE}/ai/query/", json={"text": "继续", "conversation_id": r.json()["conversation"]["id"]})
 check("AI 会话延续", r.status_code == 200 and len(r.json()["conversation"]["messages"]) == 4)
 
-# 8. 注册与错误密码
-r = requests.post(f"{BASE}/register/", json={"username": "smoke_user", "password": "abc123", "email": ""})
-check("注册新用户", r.status_code == 200 and r.json()["user"]["username"] == "smoke_user")
-r = requests.post(f"{BASE}/login/", json={"username": "smoke_user", "password": "bad"})
+# 8. 注册与错误密码(用户名带时间戳,保证冒烟可重复执行)
+smoke_name = f"smoke_{int(time.time())}"
+r = requests.post(f"{BASE}/register/", json={"username": smoke_name, "password": "abc123", "email": ""})
+check("注册新用户", r.status_code == 200 and r.json()["user"]["username"] == smoke_name)
+r = requests.post(f"{BASE}/login/", json={"username": smoke_name, "password": "bad"})
 check("错误密码 400", r.status_code == 400 and r.json()["detail"] == "Invalid credentials")
 
 # 9. 已下单接口应不存在(产品已移除交易功能)

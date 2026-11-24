@@ -163,7 +163,7 @@ function heatWidth(pct) {
 .pulse-advice { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
 .advice-title { display: block; font-size: 12px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; }
 .advice-title .hint { font-weight: 400; margin-left: 8px; }
-.advice-row { display: grid; grid-template-columns: 20px 92px 76px 1fr; gap: 10px; align-items: baseline; padding: 5px 0; }
+.advice-row { display: grid; grid-template-columns: 20px 110px 76px 1fr; gap: 10px; align-items: baseline; padding: 5px 0; }
 .advice-rank { font-weight: 800; color: var(--text-3); }
 .advice-rank.rank-top { color: var(--gold); }
 .advice-name { font-weight: 700; font-size: 13px; }
