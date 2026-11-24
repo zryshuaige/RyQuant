@@ -11,6 +11,10 @@ class Stock(models.Model):
         STOCK = "stock", "股票"
         INDEX = "index", "指数"
 
+    class QuoteSource(models.TextChoices):
+        REAL = "real", "真实行情"
+        SIM = "sim", "模拟行情"
+
     symbol = models.CharField("代码", max_length=32, unique=True)
     name = models.CharField("名称", max_length=128)
     kind = models.CharField("类型", max_length=8, choices=Kind.choices, default=Kind.STOCK)
@@ -19,6 +23,8 @@ class Stock(models.Model):
     limit_pct = models.DecimalField("涨跌停幅度%", max_digits=5, decimal_places=2, default=Decimal("10"))
     lot_size = models.IntegerField("每手股数", default=100)
     is_active = models.BooleanField("可交易", default=True)
+    quote_source = models.CharField("行情来源", max_length=8, choices=QuoteSource.choices, default=QuoteSource.SIM)
+    real_quote_at = models.DateTimeField("最近真实报价时间", null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -1,5 +1,4 @@
 """行情数据:标的列表 / 指数 / K 线 / 板块 / 资讯。全部离线可运行,无外部依赖。"""
-from datetime import timedelta
 from decimal import Decimal
 
 from django.utils import timezone
@@ -9,6 +8,7 @@ from rest_framework.views import APIView
 
 from ..models import Candle, NewsItem, Stock
 from ..services.errors import BusinessError
+from ..services.market_data import SECTOR_MEMBERS
 from ..serializers import StockSerializer
 
 TWO = Decimal("0.01")
@@ -48,6 +48,7 @@ class IndicesView(APIView):
                 "prev_close": float(s.prev_close),
                 "change": round(float(change), 2),
                 "change_pct": round(float(s.change_pct), 2),
+                "quote_source": s.quote_source,
             })
 
         if not indices:  # 回退:成分股聚合的模拟指数
@@ -63,12 +64,13 @@ class IndicesView(APIView):
                     "prev_close": base,
                     "change": round(current - base, 2),
                     "change_pct": round(avg_pct, 2),
+                    "quote_source": Stock.QuoteSource.SIM,
                 })
         return Response({"indices": indices})
 
 
 class KlineView(APIView):
-    """K 线:真实存储的模拟历史(?symbol=&period=1day|1min&limit=60)。"""
+    """K 线(?symbol=&period=1day|1min&limit=60);sources 逐根标注真实/模拟来源。"""
 
     def get(self, request):
         symbol = str(request.query_params.get("symbol", "")).strip()
@@ -93,7 +95,7 @@ class KlineView(APIView):
         candles = list(
             Candle.objects.filter(stock=stock, period=period).order_by("-time")[:limit]
         )[::-1]  # 升序输出
-        timestamps, klines, volumes = [], [], []
+        timestamps, klines, volumes, sources = [], [], [], []
         for c in candles:
             local = timezone.localtime(c.time)
             if period == Candle.Period.DAY:
@@ -103,27 +105,45 @@ class KlineView(APIView):
             # 旧契约:[open, close, low, high]
             klines.append([float(c.open), float(c.close), float(c.low), float(c.high)])
             volumes.append(c.volume)
+            sources.append(c.source)
         return Response({"symbol": stock.symbol, "name": stock.name, "period": period,
-                         "timestamps": timestamps, "klines": klines, "volumes": volumes})
+                         "timestamps": timestamps, "klines": klines, "volumes": volumes,
+                         "sources": sources, "quote_source": stock.quote_source})
 
 
 class SectorsView(APIView):
-    """板块走势:以「日期+板块」为种子的确定性随机游走,同一天内刷新结果稳定。"""
+    """板块走势:由成分股真实日 K 计算(成员归一化收盘均值,基期=100),
+    change_pct 为成员当前涨跌幅均值(真实报价或离线模拟)。成分映射见 market_data.SECTOR_MEMBERS。"""
 
     def get(self, request):
-        import random
-
-        today = timezone.localdate()
-        labels = [(today - timedelta(days=29 - i)).strftime("%m-%d") for i in range(30)]
+        stocks = {s.symbol: s for s in Stock.objects.filter(kind=Stock.Kind.STOCK)}
+        series_by_sector, all_days = {}, set()
+        for name, members in SECTOR_MEMBERS.items():
+            objs = [stocks[m] for m in members if m in stocks]
+            series = {}
+            for s in objs:
+                candles = list(
+                    Candle.objects.filter(stock=s, period=Candle.Period.DAY).order_by("-time")[:30]
+                )[::-1]
+                if not candles:
+                    continue
+                base = float(candles[0].close) or 1.0
+                for c in candles:
+                    day = timezone.localtime(c.time).date()
+                    series.setdefault(day, []).append(float(c.close) / base * 100)
+            series_by_sector[name] = (objs, series)
+            all_days.update(series.keys())
+        days = sorted(all_days)[-30:]
         sectors = []
-        for name, base, drift in (("金融", 100.0, 0.001), ("科技", 150.0, 0.002), ("医药", 120.0, 0.0015)):
-            rnd = random.Random(f"{name}-{today.isoformat()}")
-            value, values = base, []
-            for _ in range(30):
-                value *= 1 + rnd.uniform(-0.02, 0.02) + drift
-                values.append(round(value, 2))
-            sectors.append({"name": name, "values": values})
-        return Response({"labels": labels, "sectors": sectors})
+        for name, (objs, series) in series_by_sector.items():
+            heat = round(sum(float(s.change_pct) for s in objs) / len(objs), 2) if objs else 0.0
+            values, last = [], 100.0
+            for d in days:  # 停牌等缺失日沿用前值,保持日期轴对齐
+                if d in series:
+                    last = sum(series[d]) / len(series[d])
+                values.append(round(last, 2))
+            sectors.append({"name": name, "values": values, "change_pct": heat})
+        return Response({"labels": [d.strftime("%m-%d") for d in days], "sectors": sectors})
 
 
 class NewsView(APIView):

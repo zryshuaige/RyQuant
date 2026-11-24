@@ -50,8 +50,8 @@ class AIQueryView(APIView):
         if conversation is not None:
             history = [
                 {"sender": m.sender, "content": m.content}
-                for m in conversation.messages.all()[:20]
-            ]
+                for m in conversation.messages.order_by("-created_at", "-pk")[:20]
+            ][::-1]  # 取最新 20 条后恢复升序,避免长会话喂入陈旧上下文
 
         answer = get_ai_reply(request.user, text, history)
 

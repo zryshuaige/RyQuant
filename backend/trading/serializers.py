@@ -56,7 +56,7 @@ class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock
         fields = ("id", "symbol", "name", "price", "prev_close", "change", "change_pct",
-                  "limit_pct", "lot_size", "is_active")
+                  "limit_pct", "lot_size", "is_active", "quote_source", "real_quote_at")
 
     def get_change(self, obj):
         return round(float(obj.change), 2)

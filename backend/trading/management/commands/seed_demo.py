@@ -11,7 +11,7 @@
 """
 import random
 from datetime import timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandParser
@@ -20,6 +20,11 @@ from django.utils import timezone
 from trading.models import Candle, CashAccount, Favorite, NewsItem, Stock
 from trading.services import matching
 from trading.services import trading as trading_svc
+from trading.services.market_data import (
+    HISTORY_BARS,
+    fetch_real_daily_netease,
+    fetch_real_daily_tencent,
+)
 
 TWO = Decimal("0.01")
 
@@ -51,85 +56,6 @@ NEWS = [
 
 DEMO_USERNAME, DEMO_PASSWORD = "demo", "demo123456"
 ADMIN_USERNAME, ADMIN_PASSWORD = "admin", "admin123456"
-
-HISTORY_BARS = 250
-
-
-def _to_decimal(value, default=None):
-    try:
-        return Decimal(str(value)).quantize(TWO)
-    except (InvalidOperation, TypeError, ValueError):
-        return default
-
-
-def _tencent_code(symbol: str) -> str:
-    """规范腾讯行情代码:已带 sh/sz 前缀(指数)直接使用;裸代码按规则补前缀。"""
-    if symbol[:2] in ("sh", "sz", "bj"):
-        return symbol
-    return ("sh" if symbol.startswith(("6", "9", "5")) else "sz") + symbol
-
-
-def fetch_real_daily_tencent(symbol: str, count: int = HISTORY_BARS):
-    """
-    腾讯行情日 K(前复权):https://web.ifzq.gtimg.cn/appstock/app/fqkline/get
-    返回升序 [(date, open, close, high, low, volume)],失败返回 None。
-    """
-    try:
-        import requests
-    except ImportError:
-        return None
-    code = _tencent_code(symbol)
-    try:
-        resp = requests.get(
-            "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
-            params={"param": f"{code},day,,,{count},qfq"},
-            timeout=8,
-            headers={"User-Agent": "Mozilla/5.0 (FinQuant demo seed)"},
-        )
-        payload = resp.json()["data"][code]
-        rows = payload.get("qfqday") or payload.get("day") or []
-        result = []
-        for r in rows:
-            o, c, h, l = _to_decimal(r[1]), _to_decimal(r[2]), _to_decimal(r[3]), _to_decimal(r[4])
-            vol = int(float(r[5])) if len(r) > 5 and r[5] else 0
-            if None in (o, c, h, l) or c <= 0:
-                continue
-            result.append((str(r[0]), o, c, h, l, vol))
-        return result[-count:] if result else None
-    except Exception:
-        return None
-
-
-def fetch_real_daily_netease(symbol: str, count: int = HISTORY_BARS):
-    """网易历史数据 CSV(备选源)。返回格式同上。"""
-    try:
-        import requests
-    except ImportError:
-        return None
-    code = ("0" if symbol.startswith(("6", "9", "5")) else "1") + symbol
-    try:
-        resp = requests.get(
-            "http://quotes.money.163.com/service/chddata.html",
-            params={"code": code, "fields": "TCLOSE;HIGH;LOW;TOPEN;VOTURNOVER"},
-            timeout=8,
-            headers={"User-Agent": "Mozilla/5.0 (FinQuant demo seed)"},
-        )
-        resp.encoding = "gbk"
-        lines = resp.text.strip().splitlines()[1:]  # 跳过表头,按日期降序
-        result = []
-        for line in reversed(lines):  # 转升序
-            parts = line.split(",")
-            if len(parts) < 8:
-                continue
-            date, close, high, low, open_, vol = parts[0], parts[3], parts[4], parts[5], parts[6], parts[7]
-            c, h, l, o = _to_decimal(close), _to_decimal(high), _to_decimal(low), _to_decimal(open_)
-            if None in (c, h, l, o) or c <= 0:
-                continue
-            result.append((date.replace("-", ""), o, c, h, l, int(float(vol or 0))))
-        return result[-count:] if result else None
-    except Exception:
-        return None
-
 
 def _business_dates(count: int):
     """自今日(含)向前的 count 个交易日(跳过周末),用于模拟数据。"""
@@ -169,7 +95,8 @@ def _seed_history(stock: Stock, fallback_price: Decimal, out) -> None:
                 if len(date_str) == 8 and date_str.isdigit() \
                 else timezone.make_aware(timezone.datetime.strptime(date_str, "%Y-%m-%d"))
             rows.append(Candle(stock=stock, period=Candle.Period.DAY, time=t,
-                               open=o, high=h, low=l, close=c, volume=vol))
+                               open=o, high=h, low=l, close=c, volume=vol,
+                               source=Candle.Source.REAL))
         closes = [r.close for r in rows]
     else:
         source = "模拟"
@@ -190,6 +117,8 @@ def _seed_history(stock: Stock, fallback_price: Decimal, out) -> None:
     # 最近一个交易日的分钟线(09:30-11:30 / 13:00-15:00),围绕最新收盘价模拟
     rnd = random.Random(f"min-{stock.symbol}")
     last_date = timezone.localdate()
+    while last_date.weekday() >= 5:  # 分钟线只落在交易日(周末回退到周五)
+        last_date -= timedelta(days=1)
     minute_closes = [closes[-1]]
     for _ in range(239):
         minute_closes.append((minute_closes[-1] * (1 + Decimal(str(rnd.uniform(-0.004, 0.004))))).quantize(TWO))
