@@ -175,12 +175,18 @@ def _parse_day(date_str):
 
 
 def _maybe_refresh_daily(now, stocks) -> None:
-    """每交易日一次:增量补抓腾讯真实日 K(失败静默),避免历史冻结在 seed 时点。"""
+    """每交易日一次:后台线程增量补抓腾讯真实日 K(失败静默),不阻塞 tick 主循环。"""
     global _last_refresh_date
     today = now.date()
     if _last_refresh_date == today or now.weekday() >= 5:
         return
     _last_refresh_date = today
+    threading.Thread(target=_refresh_daily_all, args=(list(stocks), today),
+                     name="daily-history-refresh", daemon=True).start()
+
+
+def _refresh_daily_all(stocks, today) -> None:
+    close_old_connections()
     for stock in stocks:
         try:
             rows = fetch_real_daily_tencent(stock.symbol, count=5)
@@ -198,6 +204,7 @@ def _maybe_refresh_daily(now, stocks) -> None:
                 )
         except Exception:
             logger.debug("日 K 增量刷新失败: %s", stock.symbol, exc_info=True)
+    close_old_connections()
 
 
 def tick() -> None:

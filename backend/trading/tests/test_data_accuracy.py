@@ -95,7 +95,17 @@ class RealTickTests(BaseAPITestCase):
         now = timezone.make_aware(datetime(2026, 11, 24, 10, 0))  # 周二
         yesterday = (now.date() - timedelta(days=1)).strftime("%Y-%m-%d")
         rows = [(yesterday, Decimal("13.5"), Decimal("13.8"), Decimal("13.9"), Decimal("13.4"), 12345)]
-        with mock.patch.object(market_sim, "fetch_real_daily_tencent", return_value=rows) as fetch:
+
+        class SyncThread:  # 刷新已改后台线程,测试内同步执行以便断言
+            def __init__(self, target=None, args=(), **kw):
+                self.target, self.args = target, args
+
+            def start(self):
+                self.target(*self.args)
+
+        with mock.patch.object(market_sim, "fetch_real_daily_tencent", return_value=rows) as fetch, \
+                mock.patch.object(market_sim.threading, "Thread", SyncThread), \
+                mock.patch.object(market_sim, "close_old_connections", lambda: None):
             market_sim._maybe_refresh_daily(now, [self.stock])
             self.assertEqual(fetch.call_count, 1)
             # 同日再次 tick 不重复抓取

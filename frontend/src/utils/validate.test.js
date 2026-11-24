@@ -65,3 +65,16 @@ describe("parseQuantity", () => {
     expect(parseQuantity("x")).toBeNull();
   });
 });
+
+describe("涨停快捷价基准(昨收而非现价)", () => {
+  const prevClose = 13.2;
+  const limitHigh = Math.round(prevClose * 1.1 * 100) / 100; // 14.52
+  const band = { low: 11.88, high: limitHigh };
+  it("昨收基准的涨停价恰落在区间上界,校验通过", () => {
+    expect(priceError(limitHigh.toFixed(2), band)).toBeNull();
+  });
+  it("旧 bug 的现价基准涨停价越界,被拒绝", () => {
+    const wrong = Math.round(13.88 * 1.1 * 100) / 100; // 15.27
+    expect(priceError(wrong.toFixed(2), band)).toMatch(/超出涨跌停范围/);
+  });
+});

@@ -96,6 +96,7 @@ function heatWidth(pct) {
   background: var(--inset-bg);
   min-width: 260px;
 }
+.pulse-panel .panel-title .hint { margin-left: 8px; }
 .pulse-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .pulse-regime { font-size: 13px; padding: 4px 12px; }
 .pulse-score { font-size: 24px; font-weight: 800; }
