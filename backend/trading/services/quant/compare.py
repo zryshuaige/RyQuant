@@ -129,3 +129,48 @@ def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=1
         "regime_labels": REGIME_LABELS,
         "results": results,
     }
+
+
+def strategy_advice(closes, current_regime, window=120):
+    """
+    当前大盘状态 → 适用策略推荐:优先看该 regime 下的条件化历史表现(有成交才采信),
+    无成交时回退样本外 Sharpe 排序;返回 top3 带可解释理由。
+    """
+    seg = closes[-window:]
+    if len(seg) < 60:
+        return []
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    base = timezone.localdate() - timedelta(days=len(seg))
+    candles = [{"time": (base + timedelta(days=i)).strftime("%Y-%m-%d"),
+                "open": c, "high": c, "low": c, "close": c}
+               for i, c in enumerate(seg)]
+    out = compare_strategies(candles, candles)
+    label = REGIME_LABELS.get(current_regime, current_regime)
+    ranked = []
+    for r in out["results"]:
+        bucket = r["regime"].get(current_regime)
+        usable = bool(bucket and bucket["trade_count"] > 0)
+        key = (
+            1 if usable else 0,
+            bucket["return_pct"] if usable else r["oos"]["return_pct"],
+            r["oos"]["sharpe"],
+        )
+        if usable:
+            reason = (f"{label}状态下历史区间收益 {bucket['return_pct']:+.2f}%"
+                      f"({bucket['trade_count']} 笔、胜率 {bucket['win_rate_pct']}%),"
+                      f"样本外 Sharpe {r['oos']['sharpe']}")
+        else:
+            reason = f"{label}状态下无成交记录,按样本外 Sharpe {r['oos']['sharpe']} 排序"
+        ranked.append((key, {
+            "id": r["id"], "name": r["name"],
+            "regime_return_pct": bucket["return_pct"] if bucket else None,
+            "regime_trades": bucket["trade_count"] if bucket else 0,
+            "oos_sharpe": r["oos"]["sharpe"],
+            "oos_return_pct": r["oos"]["return_pct"],
+            "reason": reason,
+        }))
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    return [item for _, item in ranked[:3]]

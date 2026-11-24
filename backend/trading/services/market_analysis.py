@@ -151,9 +151,13 @@ def market_pulse(force=False):
             sectors.append({"name": name,
                             "change_pct": round(sum(float(s.change_pct) for s in objs) / len(objs), 2)})
     sectors.sort(key=lambda x: x["change_pct"], reverse=True)
+    from .quant.compare import strategy_advice
+
+    advice = strategy_advice(closes, trend["regime"]) if len(closes) >= 60 else []
     payload = {
         "regime": trend["regime"], "label": trend["label"], "score": trend["score"],
         "evidence": trend["evidence"],
+        "advice": advice,
         "trend": {k: trend[k] for k in ("ma20", "ma60", "slope_pct", "vol_percentile")},
         "breadth": breadth,
         "sectors": sectors,

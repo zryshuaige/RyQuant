@@ -89,7 +89,7 @@ class PulseApiTests(BaseAPITestCase):
         self.assertEqual(r1.status_code, 200)
         data = r1.json()
         for key in ("regime", "label", "score", "evidence", "breadth", "sectors",
-                    "anchor", "quote_source", "generated_at"):
+                    "anchor", "quote_source", "generated_at", "advice"):
             self.assertIn(key, data)
         self.assertEqual(data["anchor"]["symbol"], "sh000001")
         r2 = self.client.get("/api/market/pulse/")
@@ -101,6 +101,34 @@ class PulseApiTests(BaseAPITestCase):
         pulse = ma.market_pulse(force=True)
         self.assertEqual(pulse["breadth"]["advance"], 2)  # 000001 + 601318
         self.assertEqual(pulse["breadth"]["decline"], 1)  # 600519
+
+
+class StrategyAdviceTests(SimpleTestCase):
+    def test_advice_ranks_regime_performance_first(self):
+        from trading.services.quant.compare import strategy_advice
+
+        # 带回调的多头:保证趋势策略在 bull 桶内有卖出成交
+        closes = [100 * (1.003 ** i) * (1 + 0.025 * math.sin(i / 5.0)) for i in range(150)]
+        advice = strategy_advice(closes, "bull")
+        self.assertTrue(1 <= len(advice) <= 3)
+        for a in advice:
+            self.assertIn("reason", a)
+            self.assertIn("oos_sharpe", a)
+        # 多头状态下趋势类策略应有成交且排在前面
+        self.assertGreater(advice[0]["regime_trades"], 0)
+        self.assertIn("多头趋势", advice[0]["reason"])
+
+    def test_advice_fallback_when_regime_empty(self):
+        from trading.services.quant.compare import strategy_advice
+
+        advice = strategy_advice(_bull(150), "high_vol")
+        self.assertTrue(advice)
+        self.assertIn("无成交记录", advice[0]["reason"])
+
+    def test_advice_short_history_empty(self):
+        from trading.services.quant.compare import strategy_advice
+
+        self.assertEqual(strategy_advice([100.0] * 30, "range"), [])
 
 
 class AiOfflineContextTests(BaseAPITestCase):
