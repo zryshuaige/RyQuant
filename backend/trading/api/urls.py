@@ -11,6 +11,7 @@ urlpatterns = [
     path("indices/", market.IndicesView.as_view(), name="indices"),
     path("kline/", market.KlineView.as_view(), name="kline"),
     path("sectors/", market.SectorsView.as_view(), name="sectors"),
+    path("market/pulse/", market.MarketPulseView.as_view(), name="market-pulse"),
     path("news/", market.NewsView.as_view(), name="news"),
     # 自选
     path("favorites/", favorites.FavoriteListCreateView.as_view(), name="favorites"),

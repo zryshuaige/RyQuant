@@ -10,6 +10,7 @@ export const fetchStocks = () => client.get("/stocks/").then((r) => r.data);
 export const fetchIndices = () => client.get("/indices/").then((r) => r.data.indices);
 export const fetchKline = (params) => client.get("/kline/", { params }).then((r) => r.data);
 export const fetchSectors = () => client.get("/sectors/").then((r) => r.data);
+export const fetchMarketPulse = () => client.get("/market/pulse/").then((r) => r.data);
 export const fetchNews = () => client.get("/news/").then((r) => r.data);
 
 /* ---- 自选 ---- */

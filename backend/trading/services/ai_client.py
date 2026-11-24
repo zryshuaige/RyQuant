@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = (
     "你是一个模拟股票交易平台的智能助手,用简洁中文回答投资相关问题,给出客观分析,"
     "并提醒用户这是模拟交易,不构成投资建议。"
+    "平台提供规则化市场脉冲(regime/广度/波动率分位),回答行情类问题时优先引用上下文中的脉冲数据。"
 )
 
 GENERIC_TIPS = [
@@ -46,10 +47,15 @@ def _portfolio_summary(user) -> str:
 
 def _market_summary() -> str:
     from ..models import Stock
+    from .market_analysis import market_pulse
 
+    pulse = market_pulse()
+    b = pulse["breadth"]
+    head = (f"市场脉冲:{pulse['label']}(评分 {pulse['score']:+.0f}),涨 {b['advance']} 家 / 跌 {b['decline']} 家,"
+            f"平均涨跌幅 {b['avg_change_pct']:+.2f}%。" + ";".join(pulse["evidence"][:3]))
     stocks = Stock.objects.filter(is_active=True)[:5]
     parts = [f"{s.name} {s.price}({s.change_pct:+.2f}%)" for s in stocks]
-    return "近期标的一览:" + ";".join(parts) if parts else "暂无行情数据。"
+    return head + ("\n近期标的一览:" + ";".join(parts) if parts else "")
 
 
 def mock_reply(user, text: str) -> str:
@@ -79,6 +85,13 @@ def _call_deepseek(text: str, history) -> str:
 
     client = OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url=settings.DEEPSEEK_BASE_URL)
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    from .market_analysis import market_pulse
+
+    p = market_pulse()
+    messages.append({"role": "system", "content": (
+        f"当前市场脉冲(规则化推断,供参考):{p['label']} 评分 {p['score']};"
+        f"涨 {p['breadth']['advance']} 家 / 跌 {p['breadth']['decline']} 家;" + ";".join(p["evidence"][:4])
+    )})
     for msg in history[-10:]:
         role = "assistant" if msg.get("sender") == "bot" else "user"
         messages.append({"role": role, "content": msg.get("content", "")})

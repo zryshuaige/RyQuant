@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useMarketStore } from "../stores/market";
-import { fetchNews, fetchPositions } from "../api";
+import { fetchNews, fetchPositions, fetchMarketPulse } from "../api";
 import IndexCard from "../components/IndexCard.vue";
 import KlineChart from "../components/KlineChart.vue";
 import StockTable from "../components/StockTable.vue";
 import OrderModal from "../components/OrderModal.vue";
+import MarketPulse from "../components/MarketPulse.vue";
 import AnimatedNumber from "../components/AnimatedNumber.vue";
 import { fmtMoney, fmtSigned, trendClass, fmtDateTime } from "../utils/format";
 
@@ -21,6 +22,15 @@ const klineTarget = ref({ symbol: "sh000001", name: "上证指数" }); // 默认
 
 const news = ref([]);
 const account = ref(null); // 持仓汇总(已登录时展示)
+const pulse = ref(null); // 市场脉冲(60s 刷新,服务端亦有 TTL 缓存)
+let pulseTimer = null;
+
+async function loadPulse() {
+  if (document.hidden) return;
+  try {
+    pulse.value = await fetchMarketPulse();
+  } catch { /* 脉冲失败不阻塞首页 */ }
+}
 
 const realIndices = computed(() => market.indices.filter((i) => i.symbol));
 
@@ -58,7 +68,10 @@ onMounted(async () => {
   if (auth.isLoggedIn) {
     fetchPositions().then((d) => (account.value = d)).catch(() => {});
   }
+  loadPulse();
+  pulseTimer = setInterval(loadPulse, 60000);
 });
+onUnmounted(() => clearInterval(pulseTimer));
 </script>
 
 <template>
@@ -105,7 +118,13 @@ onMounted(async () => {
             <AnimatedNumber class="stat-value" :class="trend" :value="account.total_unrealized_pl ?? 0" />
           </div>
         </div>
+        <MarketPulse v-else :pulse="pulse" compact />
       </div>
+    </section>
+
+    <!-- 市场脉冲 -->
+    <section class="section-gap">
+      <MarketPulse :pulse="pulse" />
     </section>
 
     <!-- 指数 -->

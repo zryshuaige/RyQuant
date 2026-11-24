@@ -146,6 +146,15 @@ class SectorsView(APIView):
         return Response({"labels": [d.strftime("%m-%d") for d in days], "sectors": sectors})
 
 
+class MarketPulseView(APIView):
+    """GET /api/market/pulse/ — 市场脉冲:规则化 regime 判定 + 广度 + 板块热度(离线可用)。"""
+
+    def get(self, request):
+        from ..services.market_analysis import market_pulse
+
+        return Response(market_pulse())
+
+
 class NewsView(APIView):
     def get(self, request):
         news = NewsItem.objects.all()[:10]
