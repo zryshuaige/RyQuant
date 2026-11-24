@@ -4,10 +4,11 @@ import { ref, computed, onMounted } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useMarketStore } from "../stores/market";
 import {
-  fetchStrategies, runBacktest, fetchBacktestHistory, fetchBacktestDetail,
+  fetchStrategies, runBacktest, runCompare, fetchBacktestHistory, fetchBacktestDetail,
 } from "../api";
 import { fmtMoney, fmtSigned, fmtPct, fmtDateTime, trendClass } from "../utils/format";
 import BacktestChart from "../components/BacktestChart.vue";
+import CompareChart from "../components/CompareChart.vue";
 import AnimatedNumber from "../components/AnimatedNumber.vue";
 import EmptyState from "../components/EmptyState.vue";
 import VipBadge from "../components/VipBadge.vue";
@@ -27,6 +28,40 @@ const result = ref(null);
 const history = ref([]);
 const loadingHistory = ref(false);
 
+const mode = ref("single"); // single=单策略回测 / compare=跨策略有效性对比
+const cmpResult = ref(null);
+const cmpRunning = ref(false);
+const regimeKeys = computed(() => Object.keys(cmpResult.value?.regime_labels || {}));
+
+async function runCompareAction() {
+  if (!symbol.value) return toast.error("请选择对比标的");
+  cmpRunning.value = true;
+  try {
+    cmpResult.value = await runCompare({
+      symbol: symbol.value,
+      days: days.value,
+      initial_capital: Number(capital.value) || 100000,
+    });
+    toast.success("策略对比完成");
+  } catch (e) {
+    toast.error(e.friendlyMessage || "对比失败");
+  } finally {
+    cmpRunning.value = false;
+  }
+}
+
+function pickStrategy(r) {
+  // 点击对比行 → 回填单策略表单继续细调参数
+  const spec = strategies.value.find((s) => s.id === r.id);
+  if (spec) selectStrategy(spec);
+  params.value = { ...r.params };
+  mode.value = "single";
+}
+
+function regimeCell(r, key) {
+  return r.regime?.[key] || null;
+}
+
 const selected = computed(() => strategies.value.find((s) => s.id === selectedId.value));
 const realIndices = computed(() => market.indices.filter((i) => i.symbol));
 const symbolName = computed(() => {
@@ -45,6 +80,8 @@ const metricCards = computed(() => {
     { label: "胜率", value: `${m.win_rate_pct}%`, cls: m.win_rate_pct >= 50 ? "up" : "flat" },
     { label: "交易次数", value: String(m.trade_count), cls: "flat" },
     { label: "最终权益", value: fmtMoney(m.final_equity), cls: trendClass(m.final_equity - m.initial_capital) },
+    { label: "Sharpe", value: String(m.sharpe ?? "--"), cls: trendClass(m.sharpe ?? 0) },
+    { label: "盈亏比", value: m.profit_factor == null ? "--" : String(m.profit_factor), cls: (m.profit_factor ?? 0) >= 1 ? "up" : "down" },
   ];
 });
 
@@ -147,7 +184,108 @@ function strategyName(id) {
         <p class="page-sub">信号次日开盘成交 · 全仓进出 · 计入佣金与印花税</p>
       </div>
 
-      <div class="bt-grid">
+      <div class="tabs bt-tabs">
+        <button class="tab" :class="{ active: mode === 'single' }" @click="mode = 'single'">单策略回测</button>
+        <button class="tab" :class="{ active: mode === 'compare' }" @click="mode = 'compare'">策略有效性对比</button>
+      </div>
+
+      <!-- 跨策略对比 -->
+      <div v-if="mode === 'compare'" class="cmp-wrap">
+        <section class="panel cmp-toolbar">
+          <div class="field">
+            <label for="cmp-symbol">对比标的</label>
+            <select id="cmp-symbol" v-model="symbol" class="select">
+              <optgroup v-if="realIndices.length" label="指数(真实行情)">
+                <option v-for="i in realIndices" :key="i.symbol" :value="i.symbol">{{ i.name }}({{ i.symbol }})</option>
+              </optgroup>
+              <optgroup label="个股">
+                <option v-for="s in market.activeStocks" :key="s.id" :value="s.symbol">{{ s.name }}({{ s.symbol }})</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cmp-days">区间:<span class="num gold-text">{{ days }}</span> 交易日</label>
+            <input id="cmp-days" v-model.number="days" type="range" min="60" max="250" step="10" class="range" />
+          </div>
+          <button class="btn btn-primary" :disabled="cmpRunning" @click="runCompareAction">
+            <span v-if="cmpRunning" class="spinner"></span>
+            {{ cmpRunning ? "对比运行中…" : "▶ 运行对比" }}
+          </button>
+          <span class="hint cmp-note">同窗口默认参数 · 滚动样本外 3 折 · 分行情状态评估 · 排名按 OOS Sharpe</span>
+        </section>
+
+        <template v-if="cmpResult">
+          <section class="panel section-gap">
+            <h3 class="panel-title">
+              有效性排名 · {{ cmpResult.name }}
+              <span class="hint">点击行回填单策略表单</span>
+            </h3>
+            <div class="table-wrap">
+              <table class="data cmp-table">
+                <thead>
+                  <tr>
+                    <th>#</th><th>策略</th><th>总收益</th><th>OOS收益</th><th>OOS Sharpe</th>
+                    <th>最大回撤</th><th>胜率</th><th>盈亏比</th><th>折稳定性</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in cmpResult.results" :key="r.id" class="cmp-row" @click="pickStrategy(r)">
+                    <td class="num rank" :class="{ 'rank-top': r.rank === 1 }">{{ r.rank }}</td>
+                    <td class="bold">{{ r.name }}</td>
+                    <td class="num" :class="trendClass(r.metrics.total_return_pct)">{{ fmtSigned(r.metrics.total_return_pct) }}%</td>
+                    <td class="num" :class="trendClass(r.oos.return_pct)">{{ fmtSigned(r.oos.return_pct) }}%</td>
+                    <td class="num bold" :class="trendClass(r.oos.sharpe)">{{ r.oos.sharpe }}</td>
+                    <td class="num down">{{ fmtPct(r.metrics.max_drawdown_pct, false) }}</td>
+                    <td class="num">{{ r.metrics.win_rate_pct }}%</td>
+                    <td class="num">{{ r.metrics.profit_factor == null ? "--" : r.metrics.profit_factor }}</td>
+                    <td class="num dim">{{ r.oos.positive_folds }}/{{ r.oos.folds.length }} 折盈利</td>
+                    <td><button class="btn btn-sm" @click.stop="pickStrategy(r)">细调</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel section-gap">
+            <h3 class="panel-title">累计收益率对比 <span class="hint">百分比刻度 · 首席策略加粗</span></h3>
+            <CompareChart :comparison="cmpResult" />
+          </section>
+
+          <section class="panel section-gap">
+            <h3 class="panel-title">分行情状态表现 <span class="hint">regime 由指数日 K 规则判定(无未来函数)</span></h3>
+            <div class="table-wrap">
+              <table class="data">
+                <thead>
+                  <tr>
+                    <th>策略</th>
+                    <th v-for="k in regimeKeys" :key="k">{{ cmpResult.regime_labels[k] }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="r in cmpResult.results" :key="r.id">
+                    <td class="bold">{{ r.name }}</td>
+                    <td v-for="k in regimeKeys" :key="k">
+                      <template v-if="regimeCell(r, k)">
+                        <span class="num" :class="trendClass(regimeCell(r, k).return_pct)">
+                          {{ fmtSigned(regimeCell(r, k).return_pct) }}%
+                        </span>
+                        <span class="dim regime-meta">{{ regimeCell(r, k).trade_count }} 笔 · 胜率 {{ regimeCell(r, k).win_rate_pct }}%</span>
+                      </template>
+                      <span v-else class="dim">--</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </template>
+        <section v-else class="panel section-gap">
+          <EmptyState glyph="⚖" title="选择标的后点击「运行对比」"
+            sub="四大策略同场竞技:样本外收益、Sharpe、分行情状态表现与折间稳定性" />
+        </section>
+      </div>
+
+      <div v-else class="bt-grid">
         <!-- 配置区 -->
         <section class="panel config-panel">
           <h3 class="panel-title">1 · 选择策略</h3>
@@ -315,7 +453,16 @@ function strategyName(id) {
 .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 .range { width: 100%; accent-color: var(--brand-a); }
 .gold-text { color: var(--gold); font-weight: 700; }
-.metric-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.bt-tabs { margin-bottom: 14px; }
+.cmp-toolbar { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; }
+.cmp-toolbar .field { margin: 0; min-width: 180px; }
+.cmp-note { flex: 1; min-width: 220px; }
+.cmp-row { cursor: pointer; }
+.cmp-row:hover td { background: rgba(34, 211, 238, 0.06); }
+.rank { font-weight: 800; }
+.rank-top { color: var(--gold); }
+.regime-meta { display: block; font-size: 11px; margin-top: 2px; }
 .stat-card { padding: 12px 14px; }
 .stat-label { display: block; font-size: 11.5px; color: var(--text-3); margin-bottom: 4px; }
 .stat-value { font-size: 19px; font-weight: 800; }
@@ -349,6 +496,6 @@ function strategyName(id) {
 }
 @media (max-width: 1020px) {
   .bt-grid { grid-template-columns: 1fr; }
-  .metric-row { grid-template-columns: repeat(3, 1fr); }
+  .metric-row { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

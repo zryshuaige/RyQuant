@@ -33,5 +33,6 @@ export const aiQuery = (text, conversationId) =>
 /* ---- 量化回测 ---- */
 export const fetchStrategies = () => client.get("/strategies/").then((r) => r.data.strategies);
 export const runBacktest = (payload) => client.post("/backtest/", payload).then((r) => r.data.run);
+export const runCompare = (payload) => client.post("/backtest/compare/", payload).then((r) => r.data);
 export const fetchBacktestHistory = () => client.get("/backtest/history/").then((r) => r.data.runs);
 export const fetchBacktestDetail = (id) => client.get(`/backtest/history/${id}/`).then((r) => r.data.run);

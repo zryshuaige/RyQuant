@@ -108,6 +108,57 @@ class BacktestRunView(APIView):
         return round(value, 2)
 
 
+class BacktestCompareView(APIView):
+    """
+    POST /api/backtest/compare/ — body: {symbol|stock_id, days?, initial_capital?, strategies?}
+    跨策略有效性对比:同窗口默认参数 + 滚动样本外 + 分 regime 评估 + 排名;结果不持久化。
+    """
+
+    permission_classes = [IsAuthenticated, IsVip]
+    throttle_classes = [BacktestThrottle]
+
+    def post(self, request):
+        from ..services.quant.compare import compare_strategies
+
+        data = request.data
+        stock = BacktestRunView._resolve_stock(data)
+        days = BacktestRunView._parse_int(data.get("days", 120), "days", MIN_DAYS, MAX_DAYS)
+        capital = BacktestRunView._parse_capital(data.get("initial_capital", 100000))
+
+        candles = list(
+            Candle.objects.filter(stock=stock, period=Candle.Period.DAY).order_by("-time")[: days + 1]
+        )[::-1]
+        if len(candles) < MIN_DAYS:
+            raise BusinessError(f"历史数据不足({len(candles)} 根),无法对比")
+        payload = [_candle_payload(c) for c in candles]
+
+        ids = data.get("strategies")
+        if ids not in (None, ""):
+            if not isinstance(ids, list) or not all(strategy_registry.get_strategy(str(i)) for i in ids):
+                raise BusinessError("strategies 需为已知策略 id 列表")
+            ids = [str(i) for i in ids]
+
+        index_payload = None
+        anchor = Stock.objects.filter(kind=Stock.Kind.INDEX).order_by("pk").first()
+        if anchor is not None and anchor.pk != stock.pk:
+            index_candles = list(
+                Candle.objects.filter(stock=anchor, period=Candle.Period.DAY).order_by("-time")[: days + 1]
+            )[::-1]
+            if len(index_candles) >= 25:
+                index_payload = [_candle_payload(c) for c in index_candles]
+
+        result = compare_strategies(payload, index_payload, strategy_ids=ids, capital=capital)
+        result["symbol"] = stock.symbol
+        result["name"] = stock.name
+        return Response(result)
+
+
+def _candle_payload(c):
+    return {"time": timezone_local(c.time).strftime("%Y-%m-%d"),
+            "open": float(c.open), "high": float(c.high),
+            "low": float(c.low), "close": float(c.close)}
+
+
 def timezone_local(dt):
     from django.utils import timezone
 

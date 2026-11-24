@@ -28,6 +28,7 @@ urlpatterns = [
     # 量化回测(VIP)
     path("strategies/", backtest.StrategyListView.as_view(), name="strategies"),
     path("backtest/", backtest.BacktestRunView.as_view(), name="backtest"),
+    path("backtest/compare/", backtest.BacktestCompareView.as_view(), name="backtest-compare"),
     path("backtest/history/", backtest.BacktestHistoryView.as_view(), name="backtest-history"),
     path("backtest/history/<int:pk>/", backtest.BacktestDetailView.as_view(), name="backtest-detail"),
 ]

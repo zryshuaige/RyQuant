@@ -15,6 +15,7 @@ export function chartColors() {
     down: get("--down", "#00d49c"),
     brandA: get("--brand-a", "#22d3ee"),
     brandB: get("--brand-b", "#8b5cf6"),
+    gold: get("--gold", "#f6c453"),
   };
 }
 
