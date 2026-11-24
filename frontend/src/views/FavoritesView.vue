@@ -1,19 +1,21 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { useMarketStore } from "../stores/market";
 import StockTable from "../components/StockTable.vue";
-import OrderModal from "../components/OrderModal.vue";
 import EmptyState from "../components/EmptyState.vue";
 import { fetchFavorites } from "../api";
 import { toast } from "../composables/useToast";
 
 const market = useMarketStore();
-const orderStock = ref(null);
-const orderVisible = ref(false);
+const router = useRouter();
 const search = ref("");
 
 const favStocks = computed(() => market.favorites.map((f) => f.stock));
 const favIds = computed(() => new Set(favStocks.value.map((s) => s.id)));
+const joinedDates = computed(() =>
+  Object.fromEntries(market.favorites.map((f) => [f.stock.symbol, f.created_at]))
+);
 const others = computed(() => {
   const kw = search.value.trim().toLowerCase();
   return market.activeStocks.filter(
@@ -21,9 +23,8 @@ const others = computed(() => {
   );
 });
 
-function openOrder(stock) {
-  orderStock.value = stock;
-  orderVisible.value = true;
+function viewKline(stock) {
+  router.push({ name: "home", query: { symbol: stock.symbol } });
 }
 
 onMounted(async () => {
@@ -41,17 +42,17 @@ onMounted(async () => {
     <section class="panel">
       <h3 class="panel-title">
         我的自选
-        <span class="hint">{{ favStocks.length }} 只 · 点击行查看走势</span>
+        <span class="hint">{{ favStocks.length }} 只 · 点击行跳转 K 线(标注加入日期)</span>
       </h3>
       <StockTable
         v-if="favStocks.length"
         :stocks="favStocks"
         :favorite-ids="favIds"
-        @order="openOrder"
+        :joined-dates="joinedDates"
         @toggle-fav="market.toggleFavorite"
-        @select="openOrder"
+        @select="viewKline"
       />
-      <EmptyState v-else glyph="⭐" title="还没有自选股" sub="在下方市场中点击「加自选」,价格异动一目了然" />
+      <EmptyState v-else icon="star" title="还没有自选股" sub="在下方市场中点击「加自选」,K 线会醒目标注加入日期" />
     </section>
 
     <section class="panel section-gap">
@@ -62,12 +63,10 @@ onMounted(async () => {
       <StockTable
         :stocks="others"
         :favorite-ids="favIds"
-        @order="openOrder"
         @toggle-fav="market.toggleFavorite"
+        @select="viewKline"
       />
     </section>
-
-    <OrderModal v-model="orderVisible" :stock="orderStock" />
   </div>
 </template>
 

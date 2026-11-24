@@ -1,4 +1,5 @@
 """策略有效性:引擎风险指标数学 / 跨策略对比排名与 OOS / 对比端点权限与契约。"""
+import math
 from datetime import timedelta
 
 from django.utils import timezone
@@ -67,6 +68,12 @@ class CompareServiceTests(BaseAPITestCase):
         candles = _payload([100 + i * 0.2 for i in range(80)])
         out = compare_strategies(candles, strategy_ids=["ma_cross", "macd"])
         self.assertEqual({r["id"] for r in out["results"]}, {"ma_cross", "macd"})
+
+    def test_index_scale_lot_one_trades(self):
+        # 指数点位尺度(3500+)整手门槛会零成交,lot=1 必须产生交易
+        closes = [3500 * (1.002 ** i) * (1 + 0.01 * math.sin(i / 5.0)) for i in range(120)]
+        out = compare_strategies(_payload(closes), lot=1)
+        self.assertGreater(out["results"][0]["metrics"]["trade_count"], 0)
 
     def test_short_window_degrades_gracefully(self):
         candles = _payload([100 + i * 0.1 for i in range(30)])

@@ -125,6 +125,13 @@ class StrategyAdviceTests(SimpleTestCase):
         self.assertTrue(advice)
         self.assertIn("无成交记录", advice[0]["reason"])
 
+    def test_advice_index_scale_has_trades(self):
+        from trading.services.quant.compare import strategy_advice
+
+        closes = [3500 * (1.002 ** i) * (1 + 0.02 * math.sin(i / 5.0)) for i in range(150)]
+        advice = strategy_advice(closes, "bull")
+        self.assertGreater(advice[0]["regime_trades"], 0)  # 不再退化到"无成交"回退
+
     def test_advice_short_history_empty(self):
         from trading.services.quant.compare import strategy_advice
 

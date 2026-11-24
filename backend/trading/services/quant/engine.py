@@ -11,10 +11,12 @@ from typing import Dict, List, Optional
 from ..fees import buy_fee, sell_fee
 
 
-def run_backtest(candles: List[Dict], signals: List[Optional[str]], initial_capital: float) -> Dict:
+def run_backtest(candles: List[Dict], signals: List[Optional[str]], initial_capital: float,
+                 lot: int = 100) -> Dict:
     """
     candles: 升序 [{"time": "YYYY-MM-DD", "open","high","low","close"}]
     signals: 与 candles 对齐的策略信号(在 K 线 i 收盘判定,i+1 开盘执行)。
+    lot: 每手股数(个股 100/200;指数研究用 1,避免整手门槛导致零成交)。
     返回 metrics / equity_curve / candles / markers / trades。
     """
     n = len(candles)
@@ -36,7 +38,7 @@ def run_backtest(candles: List[Dict], signals: List[Optional[str]], initial_capi
             exec_price = exec_candle["open"]
             if signal == "BUY" and shares == 0:
                 affordable = cash / (exec_price * 1.001)
-                qty = int(affordable // 100) * 100  # 回测统一按 100 股一手取整
+                qty = int(affordable // lot) * lot  # 按手取整(指数 lot=1)
                 if qty > 0:
                     amount = exec_price * qty
                     fee = float(buy_fee(amount))

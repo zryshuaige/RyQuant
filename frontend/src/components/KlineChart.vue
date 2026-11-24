@@ -3,14 +3,14 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import * as echarts from "echarts/core";
 import { CandlestickChart, LineChart, BarChart } from "echarts/charts";
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from "echarts/components";
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, MarkAreaComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { fetchKline } from "../api";
 import { useMarketStore } from "../stores/market";
 import { chartColors, theme } from "../utils/chartTheme";
-import { fmtMoney, fmtPct, trendClass } from "../utils/format";
+import { fmtMoney, fmtPct, fmtDate, trendClass } from "../utils/format";
 
-echarts.use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
+echarts.use([CandlestickChart, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 const props = defineProps({
   symbol: { type: String, required: true },
@@ -31,6 +31,11 @@ const liveQuote = computed(() => {
     || market.indices.find((x) => x.symbol === props.symbol);
   if (!s) return null;
   return { price: Number(s.price ?? s.current), change: Number(s.change), changePct: Number(s.change_pct), source: s.quote_source };
+});
+// 自选加入日期:K 线金色虚线 + 区间底色醒目标注
+const favDate = computed(() => {
+  const f = market.favorites.find((x) => x.stock?.symbol === props.symbol);
+  return f ? fmtDate(f.created_at) : null;
 });
 const quote = computed(() => {
   if (liveQuote.value) return liveQuote.value;
@@ -62,7 +67,7 @@ function buildOption(data) {
   const { timestamps, klines, volumes } = data;
   const closes = klines.map((k) => k[1]);
 
-  return {
+  const option = {
     animationDuration: 600,
     backgroundColor: "transparent",
     tooltip: {
@@ -133,6 +138,22 @@ function buildOption(data) {
       },
     ],
   };
+  // 自选加入日期标注:金色虚线 markLine + 加入后区间底色 markArea(日线且日期在可视窗口内)
+  if (favDate.value && timestamps.includes(favDate.value)) {
+    const last = timestamps[timestamps.length - 1];
+    option.series[0].markLine = {
+      symbol: ["none", "none"], silent: true,
+      lineStyle: { color: c.gold, width: 2, type: "dashed" },
+      label: { formatter: `加入自选 ${favDate.value}`, color: c.gold, fontSize: 11, position: "insideEndTop" },
+      data: [{ xAxis: favDate.value }],
+    };
+    option.series[0].markArea = {
+      silent: true,
+      itemStyle: { color: c.gold + "1f" },
+      data: [[{ xAxis: favDate.value }, { xAxis: last }]],
+    };
+  }
+  return option;
 }
 
 async function load() {
@@ -189,6 +210,7 @@ onBeforeUnmount(() => {
           <span v-if="quote?.source" class="tag src-tag" :class="quote.source === 'real' ? 'tag-ok' : 'tag-muted'">
             {{ quote.source === "real" ? "真实" : "模拟" }}
           </span>
+          <span v-if="favDate" class="tag tag-gold fav-tag">自选于 {{ favDate }}</span>
           <template v-if="quote">
             <span class="quote-price num" :class="trendClass(quote.change)">{{ fmtMoney(quote.price) }}</span>
             <span class="pct-pill" :class="trendClass(quote.change)">{{ fmtPct(quote.changePct) }}</span>
@@ -210,6 +232,7 @@ onBeforeUnmount(() => {
 .chart { width: 100%; }
 .kline-title { display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .src-tag { font-size: 10px; padding: 1px 6px; }
+.fav-tag { font-size: 10px; padding: 1px 8px; }
 .quote-price { font-size: 19px; font-weight: 800; }
 .kline-error {
   position: absolute;

@@ -56,7 +56,7 @@ def _regime_breakdown(result, date_regime):
 
 
 def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=100000.0,
-                       oos_folds=OOS_FOLDS):
+                       oos_folds=OOS_FOLDS, lot=100):
     """
     candles / index_candles: 升序 [{"time","open","high","low","close"}]。
     index_candles 缺省时用标的自身序列推断 regime。
@@ -81,7 +81,7 @@ def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=1
     for spec in specs:
         params = strategies.clean_params(spec, {})
         signals = spec["signals"](closes, params)
-        full = run_backtest(candles, signals, capital)
+        full = run_backtest(candles, signals, capital, lot=lot)
 
         folds, oos_rets = [], []
         for k in range(oos_folds):
@@ -89,7 +89,7 @@ def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=1
             e = n if k == oos_folds - 1 else min(s + fold_size, n)
             if e - s < 2:
                 continue
-            seg = run_backtest(candles[s:e], signals[s:e], capital)
+            seg = run_backtest(candles[s:e], signals[s:e], capital, lot=lot)
             folds.append({"from": candles[s]["time"], "to": candles[e - 1]["time"],
                           "return_pct": seg["metrics"]["total_return_pct"]})
             oos_rets.extend(_curve_returns(seg["equity_curve"]))
@@ -147,7 +147,7 @@ def strategy_advice(closes, current_regime, window=120):
     candles = [{"time": (base + timedelta(days=i)).strftime("%Y-%m-%d"),
                 "open": c, "high": c, "low": c, "close": c}
                for i, c in enumerate(seg)]
-    out = compare_strategies(candles, candles)
+    out = compare_strategies(candles, candles, lot=1)  # 指数研究按 1 单位,避免整手门槛
     label = REGIME_LABELS.get(current_regime, current_regime)
     ranked = []
     for r in out["results"]:

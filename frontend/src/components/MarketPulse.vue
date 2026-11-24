@@ -79,6 +79,18 @@ function heatWidth(pct) {
           <li v-for="(e, i) in pulse.evidence" :key="i">{{ e }}</li>
         </ul>
       </div>
+
+      <div v-if="pulse.advice?.length" class="pulse-advice">
+        <span class="advice-title">当前状态适用策略 <span class="hint">分状态历史表现 + 样本外验证</span></span>
+        <div v-for="(a, i) in pulse.advice" :key="a.id" class="advice-row">
+          <span class="advice-rank num" :class="{ 'rank-top': i === 0 }">{{ i + 1 }}</span>
+          <span class="advice-name">{{ a.name }}</span>
+          <span class="num advice-ret" :class="trendClass(a.regime_return_pct ?? a.oos_return_pct)">
+            {{ fmtSigned(a.regime_return_pct ?? a.oos_return_pct) }}%
+          </span>
+          <span class="advice-reason">{{ a.reason }}</span>
+        </div>
+      </div>
     </template>
     <div v-else class="skeleton" style="height: 120px"></div>
   </div>
@@ -148,7 +160,18 @@ function heatWidth(pct) {
   border-radius: 50%;
   background: var(--brand-a);
 }
+.pulse-advice { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.advice-title { display: block; font-size: 12px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; }
+.advice-title .hint { font-weight: 400; margin-left: 8px; }
+.advice-row { display: grid; grid-template-columns: 20px 92px 76px 1fr; gap: 10px; align-items: baseline; padding: 5px 0; }
+.advice-rank { font-weight: 800; color: var(--text-3); }
+.advice-rank.rank-top { color: var(--gold); }
+.advice-name { font-weight: 700; font-size: 13px; }
+.advice-ret { font-size: 13px; font-weight: 700; }
+.advice-reason { font-size: 11px; color: var(--text-3); line-height: 1.5; }
 @media (max-width: 900px) {
   .pulse-body { grid-template-columns: 1fr; }
+  .advice-row { grid-template-columns: 20px 1fr 76px; }
+  .advice-reason { grid-column: 2 / -1; }
 }
 </style>

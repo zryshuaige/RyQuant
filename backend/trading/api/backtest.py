@@ -59,7 +59,8 @@ class BacktestRunView(APIView):
                     "open": float(c.open), "high": float(c.high),
                     "low": float(c.low), "close": float(c.close)}
                    for c in candles]
-        result = run_backtest(payload, signals, initial_capital)
+        lot = stock.lot_size if stock.kind == Stock.Kind.STOCK else 1
+        result = run_backtest(payload, signals, initial_capital, lot=lot)
 
         run = BacktestRun.objects.create(
             user=request.user,
@@ -146,7 +147,8 @@ class BacktestCompareView(APIView):
             if len(index_candles) >= 25:
                 index_payload = [_candle_payload(c) for c in index_candles]
 
-        result = compare_strategies(payload, index_payload, strategy_ids=ids, capital=capital)
+        lot = stock.lot_size if stock.kind == Stock.Kind.STOCK else 1
+        result = compare_strategies(payload, index_payload, strategy_ids=ids, capital=capital, lot=lot)
         result["symbol"] = stock.symbol
         result["name"] = stock.name
         return Response(result)

@@ -41,16 +41,3 @@ export function fmtDate(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export const SIDE_LABEL = { BUY: "买入", SELL: "卖出" };
-
-export const ORDER_STATUS = {
-  PENDING: { label: "未成交", tone: "info" },
-  PARTIAL_FILLED: { label: "部分成交", tone: "warn" },
-  FILLED: { label: "已成交", tone: "ok" },
-  CANCELLED: { label: "已撤单", tone: "muted" },
-  REJECTED: { label: "已废单", tone: "bad" },
-};
-
-export function orderStatus(status) {
-  return ORDER_STATUS[status] || { label: status, tone: "muted" };
-}

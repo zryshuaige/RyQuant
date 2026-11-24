@@ -2,15 +2,16 @@
 import { computed } from "vue";
 import AnimatedNumber from "./AnimatedNumber.vue";
 import AppIcon from "./AppIcon.vue";
-import { fmtPct } from "../utils/format";
+import { fmtPct, fmtDate } from "../utils/format";
 
 const props = defineProps({
   stocks: { type: Array, required: true },
   favoriteIds: { type: Set, default: () => new Set() },
   selectedSymbol: { type: String, default: "" },
   showFavorite: { type: Boolean, default: true },
+  joinedDates: { type: Object, default: null }, // symbol → 加入自选 ISO 日期(自选页展示)
 });
-const emit = defineEmits(["order", "toggle-fav", "select"]);
+const emit = defineEmits(["toggle-fav", "select"]);
 
 const rows = computed(() => props.stocks);
 </script>
@@ -24,7 +25,8 @@ const rows = computed(() => props.stocks);
           <th>名称</th>
           <th>现价</th>
           <th>涨跌幅</th>
-          <th style="width: 160px">操作</th>
+          <th v-if="joinedDates">加入自选</th>
+          <th v-if="showFavorite" style="width: 110px">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -40,17 +42,13 @@ const rows = computed(() => props.stocks);
           </td>
           <td><AnimatedNumber :value="s.price" :class="s.change >= 0 ? 'up' : 'down'" /></td>
           <td><span class="pct-pill" :class="s.change >= 0 ? 'up' : 'down'">{{ fmtPct(s.change_pct) }}</span></td>
-          <td>
-            <div class="actions">
-              <button v-if="showFavorite" class="btn btn-sm" :title="favoriteIds.has(s.id) ? '移除自选' : '加入自选'"
-                @click.stop="emit('toggle-fav', s)">
-                <AppIcon :name="favoriteIds.has(s.id) ? 'star-filled' : 'star'" :size="13" />
-                {{ favoriteIds.has(s.id) ? "自选" : "加自选" }}
-              </button>
-              <button class="btn btn-sm" :class="s.change >= 0 ? 'btn-up' : 'btn-down'" @click.stop="emit('order', s)">
-                下单
-              </button>
-            </div>
+          <td v-if="joinedDates" class="num joined-date">{{ fmtDate(joinedDates[s.symbol]) }}</td>
+          <td v-if="showFavorite">
+            <button class="btn btn-sm" :title="favoriteIds.has(s.id) ? '移除自选' : '加入自选'"
+              @click.stop="emit('toggle-fav', s)">
+              <AppIcon :name="favoriteIds.has(s.id) ? 'star-filled' : 'star'" :size="13" />
+              {{ favoriteIds.has(s.id) ? "自选" : "加自选" }}
+            </button>
           </td>
         </tr>
       </tbody>
@@ -62,6 +60,5 @@ const rows = computed(() => props.stocks);
 .stock-name { font-weight: 600; }
 .fav-star { color: var(--gold); margin-left: 5px; }
 .src-tag { font-size: 10px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
-.actions { display: flex; gap: 7px; }
-.actions .btn { display: inline-flex; align-items: center; gap: 4px; }
+.joined-date { color: var(--gold); font-weight: 600; }
 </style>

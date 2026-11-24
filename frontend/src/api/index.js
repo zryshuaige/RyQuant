@@ -18,15 +18,7 @@ export const fetchFavorites = () => client.get("/favorites/").then((r) => r.data
 export const addFavorite = (stockId) => client.post("/favorites/", { stock_id: stockId }).then((r) => r.data);
 export const removeFavorite = (id) => client.delete(`/favorites/${id}/`);
 
-/* ---- 交易 ---- */
-export const placeOrder = (payload) => client.post("/orders/", payload).then((r) => r.data);
-export const fetchOrders = (params) => client.get("/orders/", { params }).then((r) => r.data.orders);
-export const cancelOrder = (id) => client.post(`/orders/${id}/cancel/`).then((r) => r.data);
-export const fetchTrades = () => client.get("/trades/").then((r) => r.data.trades);
-export const fetchPositions = () => client.get("/positions/").then((r) => r.data);
-
 /* ---- AI 助手 ---- */
-export const activateVip = () => client.post("/ai/activate/").then((r) => r.data);
 export const aiQuery = (text, conversationId) =>
   client.post("/ai/query/", { text, conversation_id: conversationId }).then((r) => r.data);
 

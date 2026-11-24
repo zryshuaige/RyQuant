@@ -3,7 +3,6 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { theme, toggleTheme } from "../composables/useTheme";
-import VipBadge from "./VipBadge.vue";
 import AppIcon from "./AppIcon.vue";
 import { toast } from "../composables/useToast";
 
@@ -14,9 +13,8 @@ const menuOpen = ref(false);
 const navItems = [
   { to: "/", label: "行情总览", exact: true },
   { to: "/favorites", label: "自选股" },
-  { to: "/positions", label: "持仓与委托" },
-  { to: "/backtest", label: "量化回测", vip: true },
-  { to: "/ai", label: "AI 助手", vip: true },
+  { to: "/backtest", label: "量化回测" },
+  { to: "/ai", label: "AI 助手" },
 ];
 
 function logout() {
@@ -53,7 +51,6 @@ function logout() {
         <router-link v-for="item in navItems" :key="item.to" :to="item.to"
           class="nav-link" :class="{ exact: item.exact }" @click="menuOpen = false">
           {{ item.label }}
-          <span v-if="item.vip && !auth.isVip" class="vip-dot" title="需要 VIP">●</span>
         </router-link>
       </nav>
 
@@ -63,10 +60,6 @@ function logout() {
           <AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
         </button>
         <template v-if="auth.isLoggedIn">
-          <button v-if="!auth.isVip" class="btn btn-sm" @click="$router.push('/backtest')">
-            开通 <span class="gold-text">VIP</span>
-          </button>
-          <VipBadge :active="auth.isVip" />
           <span class="user-chip" :title="auth.user?.email">
             <span class="avatar">{{ auth.username.slice(0, 1).toUpperCase() }}</span>
             {{ auth.username }}

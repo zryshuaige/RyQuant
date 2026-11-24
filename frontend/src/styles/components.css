@@ -223,44 +223,6 @@ tr.selected { background: rgba(34, 211, 238, 0.09) !important; }
   color: var(--text-2);
 }
 
-/* ---------- 弹窗 ---------- */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: var(--overlay-bg);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 9vh 16px 16px;
-  overflow-y: auto;
-}
-.modal-card {
-  width: 100%;
-  max-width: 480px;
-  background: var(--modal-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-1), var(--glow-violet);
-  padding: 22px;
-}
-.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.modal-title { font-size: 16px; font-weight: 700; }
-.modal-close {
-  background: none; border: none; color: var(--text-3);
-  font-size: 20px; cursor: pointer; line-height: 1; padding: 4px;
-  transition: color 0.2s, transform 0.2s;
-}
-.modal-close:hover { color: var(--text-1); transform: rotate(90deg); }
-
-/* 弹窗过渡 */
-.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.22s; }
-.modal-fade-enter-active .modal-card, .modal-fade-leave-active .modal-card { transition: transform 0.24s var(--ease-out), opacity 0.22s; }
-.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
-.modal-fade-enter-from .modal-card { transform: translateY(14px) scale(0.97); }
-.modal-fade-leave-to .modal-card { transform: translateY(8px) scale(0.98); }
-
 /* ---------- Toast ---------- */
 .toast-host {
   position: fixed;

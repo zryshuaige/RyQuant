@@ -1,37 +1,24 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useMarketStore } from "../stores/market";
-import { fetchNews, fetchPositions, fetchMarketPulse } from "../api";
+import { fetchMarketPulse } from "../api";
 import IndexCard from "../components/IndexCard.vue";
 import KlineChart from "../components/KlineChart.vue";
 import StockTable from "../components/StockTable.vue";
-import OrderModal from "../components/OrderModal.vue";
 import MarketPulse from "../components/MarketPulse.vue";
-import AnimatedNumber from "../components/AnimatedNumber.vue";
-import { fmtMoney, fmtSigned, trendClass, fmtDateTime } from "../utils/format";
 
 const auth = useAuthStore();
 const market = useMarketStore();
+const route = useRoute();
 
 const selected = ref(null);
-const orderStock = ref(null);
-const orderVisible = ref(false);
 const search = ref("");
 const klineTarget = ref({ symbol: "sh000001", name: "上证指数" }); // 默认看上证指数
 
-const news = ref([]);
-const newsError = ref(false);
-const account = ref(null); // 持仓汇总(已登录时展示)
 const pulse = ref(null); // 市场脉冲(60s 刷新,服务端亦有 TTL 缓存)
 let pulseTimer = null;
-
-async function loadPulse() {
-  if (document.hidden) return;
-  try {
-    pulse.value = await fetchMarketPulse();
-  } catch { /* 脉冲失败不阻塞首页 */ }
-}
 
 const realIndices = computed(() => market.indices.filter((i) => i.symbol));
 
@@ -41,12 +28,13 @@ const filteredStocks = computed(() => {
   return market.activeStocks.filter((s) => s.symbol.toLowerCase().includes(kw) || s.name.includes(kw));
 });
 
-const trend = computed(() => trendClass(account.value?.total_unrealized_pl ?? 0));
-
-function openOrder(stock) {
-  orderStock.value = stock;
-  orderVisible.value = true;
+async function loadPulse() {
+  if (document.hidden) return;
+  try {
+    pulse.value = await fetchMarketPulse();
+  } catch { /* 脉冲失败不阻塞首页 */ }
 }
+
 function selectStock(stock) {
   selected.value = stock;
   klineTarget.value = { symbol: stock.symbol, name: stock.name };
@@ -54,20 +42,21 @@ function selectStock(stock) {
 function selectIndex(idx) {
   klineTarget.value = { symbol: idx.symbol, name: idx.name };
 }
-async function onPlaced() {
-  if (auth.isLoggedIn) {
-    try {
-      account.value = await fetchPositions();
-    } catch { /* 忽略 */ }
-  }
-}
 
 onMounted(async () => {
   if (!market.stocks.length) await market.refreshAll();
-  if (!selected.value && market.activeStocks.length) selected.value = market.activeStocks[0];
-  fetchNews().then((list) => (news.value = list)).catch(() => (newsError.value = true));
-  if (auth.isLoggedIn) {
-    fetchPositions().then((d) => (account.value = d)).catch(() => {});
+  if (auth.isLoggedIn && !market.favorites.length) {
+    market.fetchFavorites().catch(() => {});  // K 线自选日期标注依赖
+  }
+  // 支持从自选页带 ?symbol= 跳转直达 K 线
+  const qs = String(route.query.symbol || "");
+  const target = market.activeStocks.find((s) => s.symbol === qs)
+    || market.indices.find((i) => i.symbol === qs);
+  if (target) {
+    klineTarget.value = { symbol: target.symbol, name: target.name };
+    if (target.kind !== "index") selected.value = target;
+  } else if (!selected.value && market.activeStocks.length) {
+    selected.value = market.activeStocks[0];
   }
   loadPulse();
   pulseTimer = setInterval(loadPulse, 60000);
@@ -82,44 +71,21 @@ onUnmounted(() => clearInterval(pulseTimer));
       <div class="hero-inner panel" style="border: none">
         <div class="hero-text">
           <h1 class="hero-title">
-            模拟交易<em>实战场</em><br />策略先跑一遍再进场
+            量化研究<em>终端</em><br />先看大盘状态再选策略
           </h1>
           <p class="hero-sub">
-            实时模拟行情 · 真实撮合与费用 · VIP 量化回测 · AI 投研助手
+            真实行情 · 市场脉冲推断 · 策略有效性对比 · AI 投研助手
           </p>
-          <div class="hero-actions" v-if="!auth.isLoggedIn">
-            <router-link class="btn btn-primary" :to="{ name: 'register' }">开启 VIP</router-link>
+          <div v-if="!auth.isLoggedIn" class="hero-actions">
+            <router-link class="btn btn-primary" :to="{ name: 'register' }">注册开始研究</router-link>
             <router-link class="btn" :to="{ name: 'login' }">登录</router-link>
           </div>
-          <div v-else-if="!auth.isVip" class="hero-actions">
-            <router-link class="btn btn-primary" :to="{ name: 'backtest' }">开启 VIP</router-link>
-            <router-link class="btn" :to="{ name: 'positions' }">查看持仓</router-link>
-          </div>
           <div v-else class="hero-actions">
-            <button class="btn btn-primary" @click="selected && openOrder(selected)">快速下单</button>
-            <router-link class="btn" :to="{ name: 'positions' }">查看持仓</router-link>
+            <router-link class="btn btn-primary" :to="{ name: 'backtest' }">量化回测</router-link>
+            <router-link class="btn" :to="{ name: 'favorites' }">我的自选</router-link>
           </div>
         </div>
-
-        <div v-if="auth.isLoggedIn && account" class="hero-stats">
-          <div class="stat">
-            <span class="stat-label">总资产</span>
-            <AnimatedNumber class="stat-value" :value="account.total_asset ?? 0" />
-          </div>
-          <div class="stat">
-            <span class="stat-label">可用资金</span>
-            <AnimatedNumber class="stat-value" :value="Number(account.cash?.balance ?? 0)" />
-          </div>
-          <div class="stat">
-            <span class="stat-label">持仓市值</span>
-            <AnimatedNumber class="stat-value" :value="account.total_market_value ?? 0" />
-          </div>
-          <div class="stat">
-            <span class="stat-label">浮动盈亏</span>
-            <AnimatedNumber class="stat-value" :class="trend" :value="account.total_unrealized_pl ?? 0" />
-          </div>
-        </div>
-        <MarketPulse v-else :pulse="pulse" compact />
+        <MarketPulse :pulse="pulse" compact />
       </div>
     </section>
 
@@ -136,43 +102,21 @@ onUnmounted(() => clearInterval(pulseTimer));
       <div v-if="!market.indices.length" class="panel skeleton" style="height: 118px"></div>
     </section>
 
-    <!-- K 线 + 资讯 -->
-    <section class="grid-2 section-gap media-grid">
-      <div class="panel">
-        <div class="kline-tabs">
-          <button v-for="idx in realIndices" :key="idx.symbol" class="btn btn-sm kline-chip"
-            :class="{ 'chip-on': klineTarget.symbol === idx.symbol }" @click="selectIndex(idx)">
-            {{ idx.name }}
-          </button>
-          <button v-if="selected" class="btn btn-sm kline-chip"
-            :class="{ 'chip-on': klineTarget.symbol === selected.symbol }"
-            @click="klineTarget = { symbol: selected.symbol, name: selected.name }">
-            {{ selected.name }}
-          </button>
-        </div>
-        <KlineChart v-if="klineTarget?.symbol" :symbol="klineTarget.symbol" :name="klineTarget.name" :height="360" />
-        <div v-else class="panel skeleton" style="height: 400px"></div>
+    <!-- K 线 -->
+    <section class="panel section-gap">
+      <div class="kline-tabs">
+        <button v-for="idx in realIndices" :key="idx.symbol" class="btn btn-sm kline-chip"
+          :class="{ 'chip-on': klineTarget.symbol === idx.symbol }" @click="selectIndex(idx)">
+          {{ idx.name }}
+        </button>
+        <button v-if="selected" class="btn btn-sm kline-chip"
+          :class="{ 'chip-on': klineTarget.symbol === selected.symbol }"
+          @click="klineTarget = { symbol: selected.symbol, name: selected.name }">
+          {{ selected.name }}
+        </button>
       </div>
-      <div class="panel">
-        <h3 class="panel-title">
-          财经快讯
-          <span class="hint">模拟数据</span>
-        </h3>
-        <ul class="news-list">
-          <li v-for="n in news" :key="n.id" class="news-item">
-            <span class="news-dot"></span>
-            <div>
-              <div class="news-title">{{ n.title }}</div>
-              <div class="news-meta">{{ n.source }} · {{ fmtDateTime(n.ts) }}</div>
-            </div>
-          </li>
-          <li v-if="!news.length && !newsError" class="news-item"><div class="news-meta">加载中…</div></li>
-          <li v-if="newsError && !news.length" class="news-item">
-            <div class="news-meta">快讯加载失败,稍后自动重试</div>
-          </li>
-          <li v-if="!newsError && !news.length" class="news-item"><div class="news-meta">暂无快讯</div></li>
-        </ul>
-      </div>
+      <KlineChart v-if="klineTarget?.symbol" :symbol="klineTarget.symbol" :name="klineTarget.name" :height="380" />
+      <div v-else class="panel skeleton" style="height: 400px"></div>
     </section>
 
     <!-- 标的列表 -->
@@ -185,13 +129,10 @@ onUnmounted(() => clearInterval(pulseTimer));
         :stocks="filteredStocks"
         :favorite-ids="market.favoriteStockIds"
         :selected-symbol="selected?.symbol"
-        @order="openOrder"
         @select="selectStock"
         @toggle-fav="market.toggleFavorite"
       />
     </section>
-
-    <OrderModal v-model="orderVisible" :stock="orderStock" @placed="onPlaced" />
   </div>
 </template>
 
@@ -212,32 +153,10 @@ onUnmounted(() => clearInterval(pulseTimer));
 }
 .hero-sub { color: var(--text-2); margin: 10px 0 18px; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 12px;
-}
-.stat {
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--inset-bg);
-  min-width: 150px;
-}
-.stat-label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
-.stat-value { font-size: 21px; font-weight: 800; }
-.media-grid { grid-template-columns: 1.5fr 1fr; }
-.news-list { list-style: none; margin: 0; padding: 0; }
-.news-item { display: flex; gap: 10px; padding: 11px 2px; border-bottom: 1px dashed var(--border); }
-.news-item:last-child { border-bottom: none; }
-.news-dot { width: 7px; height: 7px; margin-top: 8px; border-radius: 50%; background: var(--brand-a); flex: none; box-shadow: var(--glow-brand); }
-.news-title { font-size: 13px; font-weight: 600; }
-.news-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 .search { max-width: 230px; font-size: 13px; padding: 7px 12px; }
 .kline-tabs { display: flex; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
 .kline-chip.chip-on { border-color: var(--brand-a); color: var(--brand-a); box-shadow: var(--glow-brand); }
 @media (max-width: 900px) {
-  .media-grid { grid-template-columns: 1fr; }
-  .hero-stats { width: 100%; grid-template-columns: repeat(2, 1fr); }
+  .hero-inner { gap: 16px; }
 }
 </style>

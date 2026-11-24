@@ -12,7 +12,6 @@ import CompareChart from "../components/CompareChart.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AnimatedNumber from "../components/AnimatedNumber.vue";
 import EmptyState from "../components/EmptyState.vue";
-import VipBadge from "../components/VipBadge.vue";
 import { toast } from "../composables/useToast";
 
 const auth = useAuthStore();
@@ -94,15 +93,6 @@ async function loadHistory() {
   loadingHistory.value = false;
 }
 
-async function activate() {
-  try {
-    await auth.activateVip();
-    toast.success("VIP 已开通,量化回测已解锁!");
-    await loadHistory();
-  } catch (e) {
-    toast.error(e.friendlyMessage || "开通失败");
-  }
-}
 
 async function run() {
   if (!selectedId.value) return toast.error("请先选择一个策略");
@@ -144,7 +134,7 @@ onMounted(async () => {
     toast.error(e.friendlyMessage || "策略加载失败");
   }
   if (!symbol.value && market.activeStocks.length) symbol.value = market.activeStocks[0].symbol;
-  if (auth.isVip) loadHistory();
+  if (auth.isLoggedIn) loadHistory();
 });
 
 function selectStrategy(s) {
@@ -159,29 +149,8 @@ function strategyName(id) {
 
 <template>
   <div class="page">
-    <!-- 未开通 VIP 的引导卡片 -->
-    <div v-if="!auth.isVip" class="vip-gate panel-gradient">
-      <div class="panel vip-inner" style="border: none">
-        <div class="lock"><AppIcon name="lock" :size="40" /></div>
-        <h1 class="vip-title">量化策略回测</h1>
-        <p class="vip-sub">
-          内置双均线 / MACD / RSI / 布林带四大经典策略,在 <strong>250 个交易日</strong>的真实模拟 K 线上
-          回测你的想法:资金曲线、最大回撤、胜率与逐笔交易,一键生成。
-        </p>
-        <ul class="vip-perks">
-          <li>✦ 4 个可调参数的内置策略</li>
-          <li>✦ 次日开盘成交 · 计入佣金与印花税的真实模拟</li>
-          <li>✦ 策略收益 vs 买入持有基准对比</li>
-          <li>✦ 回测历史云端保存,随时回看</li>
-        </ul>
-        <button class="btn btn-primary btn-lg" @click="activate">开通 VIP · 免费体验全部回测</button>
-        <p class="vip-note">模拟环境内 VIP 完全免费,开通后 AI 投研助手同步解锁</p>
-      </div>
-    </div>
-
-    <template v-else>
-      <div class="bt-head">
-        <h1 class="page-title">量化回测 <VipBadge active /></h1>
+    <div class="bt-head">
+      <h1 class="page-title">量化回测</h1>
         <p class="page-sub">信号次日开盘成交 · 全仓进出 · 计入佣金与印花税</p>
       </div>
 
@@ -398,34 +367,10 @@ function strategyName(id) {
           </div>
         </section>
       </div>
-    </template>
   </div>
 </template>
 
 <style scoped>
-.vip-gate { max-width: 640px; margin: 6vh auto 0; }
-.vip-inner { text-align: center; padding: 44px 36px; }
-.lock { color: var(--gold); margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(246, 196, 83, 0.4)); }
-.vip-title {
-  font-size: 30px;
-  background: linear-gradient(120deg, #f6c453, #ff9d5c 60%, #f6c453);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.vip-sub { color: var(--text-2); margin: 14px 0; }
-.vip-perks {
-  list-style: none;
-  margin: 0 auto 22px;
-  padding: 0;
-  max-width: 380px;
-  text-align: left;
-  color: var(--text-2);
-  font-size: 13px;
-}
-.vip-perks li { padding: 5px 0; }
-.btn-lg { padding: 12px 26px; font-size: 15px; }
-.vip-note { color: var(--text-3); font-size: 12px; margin-top: 12px; }
 
 .page-title { font-size: 24px; display: flex; align-items: center; gap: 10px; }
 .page-sub { color: var(--text-3); font-size: 13px; margin: 6px 0 18px; }

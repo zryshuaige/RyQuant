@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fmtMoney, fmtSigned, fmtPct, trendClass, orderStatus } from "./format";
+import { fmtMoney, fmtSigned, fmtPct, trendClass, fmtDate } from "./format";
 
 describe("fmtMoney", () => {
   it("千分位与两位小数", () => {
@@ -31,13 +31,12 @@ describe("trendClass", () => {
   });
 });
 
-describe("orderStatus", () => {
-  it("全部状态都有中文标签", () => {
-    for (const s of ["PENDING", "PARTIAL_FILLED", "FILLED", "CANCELLED", "REJECTED"]) {
-      expect(orderStatus(s).label).toBeTruthy();
-    }
+describe("fmtDate(自选加入日期标注)", () => {
+  it("ISO 转 YYYY-MM-DD", () => {
+    expect(fmtDate("2026-10-09T12:34:56+08:00")).toBe("2026-10-09");
   });
-  it("未知状态回退", () => {
-    expect(orderStatus("UNKNOWN").label).toBe("UNKNOWN");
+  it("空值占位", () => {
+    expect(fmtDate(null)).toBe("--");
+    expect(fmtDate("")).toBe("--");
   });
 });

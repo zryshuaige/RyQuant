@@ -1,4 +1,4 @@
-/** 认证状态:token/user 持久化于 localStorage,VIP 状态随用户对象 */
+/** 认证状态:token/user 持久化于 localStorage */
 import { defineStore } from "pinia";
 import * as api from "../api";
 
@@ -9,7 +9,6 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     isLoggedIn: (s) => Boolean(s.token),
-    isVip: (s) => Boolean(s.user?.is_vip),
     username: (s) => s.user?.username || "",
   },
   actions: {
@@ -29,14 +28,6 @@ export const useAuthStore = defineStore("auth", {
     async register(payload) {
       const data = await api.authRegister(payload);
       this._persist(data.token, data.user);
-      return data;
-    },
-    async activateVip() {
-      const data = await api.activateVip();
-      if (this.user) {
-        this.user = { ...this.user, is_vip: true };
-        localStorage.setItem("fin_user", JSON.stringify(this.user));
-      }
       return data;
     },
     logout() {

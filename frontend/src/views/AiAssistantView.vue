@@ -4,7 +4,6 @@ import { ref, nextTick, onMounted } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { aiQuery } from "../api";
 import { fmtDateTime } from "../utils/format";
-import VipBadge from "../components/VipBadge.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { toast } from "../composables/useToast";
 
@@ -17,16 +16,8 @@ const conversationId = ref(null);
 const error = ref("");
 const listEl = ref(null);
 
-const suggestions = ["分析我的持仓", "现在行情怎么样?", "怎么用双均线策略?", "如何撤单?"];
+const suggestions = ["分析我的自选", "现在大盘适合什么策略?", "怎么用双均线策略?", "市场脉冲怎么看?"];
 
-async function activate() {
-  try {
-    await auth.activateVip();
-    toast.success("VIP 已开通,AI 助手已解锁!");
-  } catch (e) {
-    toast.error(e.friendlyMessage || "开通失败");
-  }
-}
 
 async function scrollToBottom() {
   await nextTick();
@@ -54,7 +45,7 @@ async function send(text) {
 }
 
 onMounted(() => {
-  if (auth.isVip) {
+  if (auth.isLoggedIn) {
     messages.value.push({
       sender: "bot",
       content: "你好!我是 RyQuant 投研助手(模拟环境)。可以直接问我持仓分析、行情观点(含市场脉冲推断),或让我解释某个量化策略。提示:回答不构成投资建议。",
@@ -66,22 +57,8 @@ onMounted(() => {
 
 <template>
   <div class="page ai-page">
-    <!-- 未开通 VIP -->
-    <div v-if="!auth.isVip" class="panel-gradient vip-gate">
-      <div class="panel vip-inner" style="border: none">
-        <div class="lock"><AppIcon name="robot" :size="40" /></div>
-        <h1 class="vip-title">AI 投研助手</h1>
-        <p class="vip-sub">
-          接入大模型的对话式投研助理:解读你的持仓与盈亏、分析模拟行情、讲解量化策略。
-          <br />VIP 开通后即可使用;未配置 AI Key 时将使用内置离线分析引擎。
-        </p>
-        <button class="btn btn-primary btn-lg" @click="activate">开通 VIP · 解锁 AI 助手</button>
-      </div>
-    </div>
-
-    <template v-else>
-      <div class="ai-head">
-        <h1 class="page-title">AI 投研助手 <VipBadge active /></h1>
+    <div class="ai-head">
+      <h1 class="page-title">AI 投研助手</h1>
         <p class="page-sub">回答为模拟环境生成,不构成任何投资建议</p>
       </div>
 
@@ -119,23 +96,10 @@ onMounted(() => {
           </button>
         </form>
       </section>
-    </template>
   </div>
 </template>
 
 <style scoped>
-.vip-gate { max-width: 640px; margin: 6vh auto 0; }
-.vip-inner { text-align: center; padding: 44px 36px; }
-.lock { color: var(--brand-a); margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.4)); }
-.vip-title {
-  font-size: 30px;
-  background: var(--brand-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.vip-sub { color: var(--text-2); margin: 14px 0 22px; line-height: 1.8; }
-.btn-lg { padding: 12px 26px; font-size: 15px; }
 
 .page-title { font-size: 24px; display: flex; align-items: center; gap: 10px; }
 .page-sub { color: var(--text-3); font-size: 13px; margin: 6px 0 18px; }

@@ -5,7 +5,6 @@ const routes = [
   { path: "/login", name: "login", component: () => import("../views/LoginView.vue"), meta: { title: "登录", guestOnly: true } },
   { path: "/register", name: "register", component: () => import("../views/RegisterView.vue"), meta: { title: "注册", guestOnly: true } },
   { path: "/favorites", name: "favorites", component: () => import("../views/FavoritesView.vue"), meta: { title: "自选股", requiresAuth: true } },
-  { path: "/positions", name: "positions", component: () => import("../views/PositionsView.vue"), meta: { title: "持仓与委托", requiresAuth: true } },
   { path: "/backtest", name: "backtest", component: () => import("../views/BacktestView.vue"), meta: { title: "量化回测", requiresAuth: true } },
   { path: "/ai", name: "ai", component: () => import("../views/AiAssistantView.vue"), meta: { title: "AI 助手", requiresAuth: true } },
   { path: "/:pathMatch(.*)*", name: "not-found", component: () => import("../views/NotFoundView.vue"), meta: { title: "页面不存在" } },
