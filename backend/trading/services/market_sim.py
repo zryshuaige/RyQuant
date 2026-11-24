@@ -16,7 +16,6 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from ..models import Candle, Stock
-from . import matching
 from .market_data import fetch_real_daily_tencent, tencent_code
 
 logger = logging.getLogger(__name__)
@@ -121,7 +120,6 @@ def _tick_stock(stock: Stock, now) -> None:
 
     stock.quote_source = Stock.QuoteSource.SIM
     _apply_price(stock, now, new_price, random.randint(stock.lot_size, stock.lot_size * 8))
-    matching.match_pending_orders(stock)
 
 
 @transaction.atomic
@@ -132,7 +130,6 @@ def _tick_stock_real(stock: Stock, now, quote) -> None:
     stock.real_quote_at = now
     new_price = min(max(quote["current"], stock.limit_down), stock.limit_up)
     _apply_price(stock, now, new_price, quote["volume"], quote["high"], quote["low"])
-    matching.match_pending_orders(stock)
 
 
 @transaction.atomic

@@ -10,9 +10,9 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "你是一个模拟股票交易平台的智能助手,用简洁中文回答投资相关问题,给出客观分析,"
-    "并提醒用户这是模拟交易,不构成投资建议。"
-    "平台提供规则化市场脉冲(regime/广度/波动率分位),回答行情类问题时优先引用上下文中的脉冲数据。"
+    "你是一个股票量化研究终端的智能助手,用简洁中文回答投资相关问题,给出客观分析,"
+    "并提醒用户行情为模拟/研究用途,不构成投资建议。"
+    "平台提供规则化市场脉冲(regime/广度/波动率分位)与分状态策略有效性数据,回答行情/策略类问题时优先引用上下文中的脉冲与推荐数据。"
 )
 
 GENERIC_TIPS = [
@@ -23,26 +23,20 @@ GENERIC_TIPS = [
 ]
 
 
-def _portfolio_summary(user) -> str:
-    from ..models import CashAccount, Position
+def _favorites_summary(user) -> str:
+    from django.utils import timezone
 
-    try:
-        cash = user.cash_account
-    except Exception:
-        return "你还没有资金账户,先完成一笔下单吧。"
-    positions = Position.objects.filter(user=user, quantity__gt=0).select_related("stock")
-    lines = []
-    market_value = 0.0
-    for p in positions:
-        mv = float(p.stock.price) * p.quantity
-        pl = (float(p.stock.price) - float(p.avg_price)) * p.quantity
-        market_value += mv
-        lines.append(f"{p.stock.name}({p.stock.symbol}){p.quantity} 股,浮动盈亏 {pl:+.2f} 元")
-    total = float(cash.balance) + float(cash.frozen_cash) + market_value
-    head = f"当前可用资金 {cash.balance} 元、冻结 {cash.frozen_cash} 元,持仓市值约 {market_value:.2f} 元,总资产约 {total:.2f} 元。"
-    if lines:
-        return head + "\n" + "\n".join(lines)
-    return head + "目前空仓,可以考虑分批建仓。"
+    from ..models import Favorite
+
+    favs = Favorite.objects.filter(user=user).select_related("stock")[:8]
+    if not favs:
+        return "你还没有自选股。在行情总览页点击「加自选」建立观察池,K 线会标注加入日期。"
+    lines = [
+        f"{f.stock.name}({f.stock.symbol}){timezone.localtime(f.created_at):%Y-%m-%d} 加入自选,"
+        f"现价 {f.stock.price}({f.stock.change_pct:+.2f}%)"
+        for f in favs
+    ]
+    return "你的自选股:\n" + "\n".join(lines)
 
 
 def _market_summary() -> str:
@@ -61,8 +55,8 @@ def _market_summary() -> str:
 def mock_reply(user, text: str) -> str:
     """离线模拟回答:按关键词路由,结合真实账户数据生成内容。"""
     t = text.lower()
-    if any(k in t for k in ("持仓", "仓位", "账户", "资产", "余额", "盈亏")):
-        return _portfolio_summary(user)
+    if any(k in t for k in ("自选", "关注", "持仓", "账户", "观察池")):
+        return _favorites_summary(user)
     if any(k in t for k in ("行情", "大盘", "涨跌", "走势", "指数")):
         return _market_summary()
     if any(k in t for k in ("策略", "回测", "量化", "均线", "macd", "rsi", "布林")):
@@ -70,10 +64,10 @@ def mock_reply(user, text: str) -> str:
             "平台内置 4 个可回测策略:双均线交叉、MACD 金叉死叉、RSI 均值回归、布林带突破。"
             "到「量化回测」页选择策略与参数即可在历史 K 线上验证;回测为次日开盘成交、计入佣金与印花税。"
         )
-    if any(k in t for k in ("怎么", "如何", "下单", "买入", "卖出", "撤单")):
+    if any(k in t for k in ("怎么", "如何", "用", "流程")):
         return (
-            "下单流程:在首页或持仓页点击「下单」,选择限价/市价 → 输入数量(整手)→ 确认。"
-            "买单提交即冻结资金,成交后扣款;卖单冻结持仓。未成交的委托可随时撤单,资金秒退。"
+            "使用流程:行情总览看市场脉冲与指数 → 加自选建立观察池(K 线标注加入日期)→ "
+            "量化回测页跑单策略或「策略有效性对比」→ 参考当前大盘状态的适用策略推荐。"
         )
     import random
 

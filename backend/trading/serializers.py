@@ -6,26 +6,17 @@ from .models import (
     AIConversation,
     AIMessage,
     BacktestRun,
-    CashAccount,
     Favorite,
-    Order,
     Stock,
-    Trade,
 )
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
-    is_vip = serializers.SerializerMethodField()
-
     class Meta:
         model = User
-        fields = ("id", "username", "email", "is_vip")
-
-    def get_is_vip(self, obj) -> bool:
-        account = getattr(obj, "cash_account", None)
-        return bool(account and account.is_vip)
+        fields = ("id", "username", "email")
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -75,32 +66,6 @@ class FavoriteSerializer(serializers.ModelSerializer):
         read_only_fields = ("created_at",)
 
 
-class OrderSerializer(serializers.ModelSerializer):
-    stock = StockSerializer(read_only=True)
-    stock_id = serializers.PrimaryKeyRelatedField(queryset=Stock.objects.all(), write_only=True, source="stock")
-
-    class Meta:
-        model = Order
-        fields = ("id", "stock", "stock_id", "side", "order_type", "quantity", "price",
-                  "filled_quantity", "avg_fill_price", "status", "reject_reason",
-                  "frozen_amount", "frozen_quantity",
-                  "created_at", "updated_at")
-        read_only_fields = ("status", "filled_quantity", "avg_fill_price", "reject_reason")
-
-
-class TradeSerializer(serializers.ModelSerializer):
-    stock = StockSerializer(read_only=True)
-    order = serializers.IntegerField(source="order_id", read_only=True)
-
-    class Meta:
-        model = Trade
-        fields = ("id", "order", "stock", "side", "quantity", "price", "amount", "fee", "created_at")
-
-
-class CashAccountSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CashAccount
-        fields = ("balance", "frozen_cash", "is_vip")
 
 
 class AIMessageSerializer(serializers.ModelSerializer):

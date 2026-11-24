@@ -1,9 +1,9 @@
 """
 一键生成演示数据(幂等,可重复执行):
-- 8 只示例股票 + 250 根日 K + 最近一个交易日的分钟线(供图表与回测)
+- 8 只示例股票 + 3 指数 + 250 根日 K + 最近一个交易日的分钟线(供图表与回测)
   日 K 优先抓取**真实历史行情**(腾讯行情接口,前复权);网络不可用时自动回退为随机游走模拟
-- 模拟资讯、演示账户(demo / demo123456,VIP 已开通)、管理员(admin / admin123456)
-- 通过真实交易服务产生历史委托与成交,保证资金/持仓/订单数据自洽
+- 演示账户(demo / demo123456)与管理员(admin / admin123456)
+- 演示自选股(加入日期回填到过去,K 线标注可见)
 
 用法:
   python manage.py seed_demo                    # 首次生成;已存在的股票跳过
@@ -17,9 +17,7 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
-from trading.models import Candle, CashAccount, Favorite, NewsItem, Stock
-from trading.services import matching
-from trading.services import trading as trading_svc
+from trading.models import Candle, Favorite, Stock
 from trading.services.market_data import (
     HISTORY_BARS,
     fetch_real_daily_netease,
@@ -45,17 +43,12 @@ INDICES = [
     ("sz399006", "创业板指", "2000.00"),
 ]
 
-NEWS = [
-    ("央行开展 4500 亿元逆回购操作,市场流动性合理充裕", "公开市场操作净投放资金,机构预计月末资金面将保持平稳。"),
-    ("三大指数集体收涨,科技板块领涨两市", "半导体、人工智能概念全天强势,成交额较上一交易日放大一成。"),
-    ("多家券商上调全年盈利预测,看好高端制造景气度", "研报指出,设备更新与出口回暖共同拉动制造业投资。"),
-    ("国际金价创阶段新高,避险情绪升温", "分析人士认为,短期金价或维持高位震荡,关注本周经济数据。"),
-    ("新「国九条」落地一周年:上市公司分红总额创历史新高", "监管持续引导上市公司提高股东回报,红利资产受资金青睐。"),
-    ("模拟盘小贴士:限价单未成交可撤单改价", "本平台为模拟交易环境,祝练习愉快,注意仓位管理。"),
-]
-
 DEMO_USERNAME, DEMO_PASSWORD = "demo", "demo123456"
 ADMIN_USERNAME, ADMIN_PASSWORD = "admin", "admin123456"
+
+# 演示自选:加入日期回填天数(让 K 线 markLine 落在可视窗口内)
+DEMO_FAVORITES = [("600519", 45), ("300750", 20), ("688981", 8)]
+
 
 def _business_dates(count: int):
     """自今日(含)向前的 count 个交易日(跳过周末),用于模拟数据。"""
@@ -139,31 +132,8 @@ def _seed_history(stock: Stock, fallback_price: Decimal, out) -> None:
     out(f"    K 线来源:{source}({len(rows)} 根,最新收盘 {closes[-1]})")
 
 
-def _seed_orders(demo: User) -> None:
-    from trading.services.trading import place_order
-
-    def filled_buy(symbol, quantity):
-        stock = Stock.objects.get(symbol=symbol)
-        order = place_order(demo, stock, side="BUY", quantity=quantity,
-                            order_type="LIMIT", price=stock.price)
-        assert order.status == "FILLED", f"{symbol} 演示买单未成交: {order.status}"
-
-    filled_buy("000001", 200)
-    filled_buy("600410", 400)
-    filled_buy("300750", 100)
-
-    # 卖出部分持仓,形成已实现盈亏
-    stock = Stock.objects.get(symbol="600410")
-    place_order(demo, stock, side="SELL", quantity=200, order_type="LIMIT", price=stock.price)
-
-    # 一笔低于市价的限价买单 → 停留在 PENDING,展示「当前委托」与冻结资金
-    wly = Stock.objects.get(symbol="000858")
-    place_order(demo, wly, side="BUY", quantity=100,
-                order_type="LIMIT", price=(wly.price * Decimal("0.96")).quantize(TWO))
-
-
 class Command(BaseCommand):
-    help = "生成演示数据:股票/真实历史K线(离线自动模拟)/资讯/演示账户/历史订单(幂等)"
+    help = "生成演示数据:股票/真实历史K线(离线自动模拟)/演示账户/自选股(幂等)"
 
     def add_arguments(self, parser: CommandParser):
         parser.add_argument("--refresh-history", action="store_true",
@@ -172,7 +142,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         refresh = options["refresh_history"]
 
-        # 1. 股票与历史行情(指数 kind=index,不可交易,仅供行情展示与回测)
+        # 1. 股票与历史行情(指数 kind=index,仅供行情展示与回测)
         for symbol, name, price in STOCKS:
             stock, created = Stock.objects.get_or_create(symbol=symbol, defaults={"name": name})
             if created:
@@ -200,17 +170,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"  = 指数 {symbol} {name} 已存在,跳过")
 
-        # 2. 资讯
-        now = timezone.localtime()
-        if not NewsItem.objects.exists():
-            for i, (title, summary) in enumerate(NEWS):
-                NewsItem.objects.create(
-                    title=title, summary=summary, source="模拟财经",
-                    published_at=now - timedelta(hours=i * 7),
-                )
-            self.stdout.write(f"  + 资讯 {len(NEWS)} 条")
-
-        # 3. 管理员与演示账户
+        # 2. 管理员与演示账户
         if not User.objects.filter(username=ADMIN_USERNAME).exists():
             User.objects.create_superuser(ADMIN_USERNAME, "admin@example.com", ADMIN_PASSWORD)
             self.stdout.write(f"  + 管理员 {ADMIN_USERNAME}/{ADMIN_PASSWORD}")
@@ -222,35 +182,19 @@ class Command(BaseCommand):
         if created:
             demo.set_password(DEMO_PASSWORD)
             demo.save()
-        cash, _ = CashAccount.objects.get_or_create(user=demo)
-        if not cash.is_vip:
-            cash.is_vip = True
-            cash.save(update_fields=["is_vip", "updated_at"])
-
-        # 4. 演示订单:通过真实交易服务产生,保证数据自洽;无限流动性使限价单立即成交
-        if refresh and not created:
-            # 价格已刷新,同步重建演示账户的持仓/委托,避免旧成本价与新行情脱节
-            from django.db import transaction
-
-            with transaction.atomic():
-                demo.orders.all().delete()   # 级联删除成交回报
-                demo.positions.all().delete()
-                cash.balance = trading_svc._initial_capital()
-                cash.frozen_cash = Decimal("0.00")
-                cash.save(update_fields=["balance", "frozen_cash", "updated_at"])
-            self.stdout.write("  ↻ 已重置演示账户交易数据(适配新价格)")
-
-        if created or refresh:
-            original = matching._liquidity
-            matching._liquidity = lambda stock, order: 10 ** 9
-            try:
-                _seed_orders(demo)
-            finally:
-                matching._liquidity = original
-            for symbol in ("600519", "300750", "688981"):
-                Favorite.objects.get_or_create(user=demo, stock=Stock.objects.get(symbol=symbol))
-            self.stdout.write(f"  + 演示账户 {DEMO_USERNAME}/{DEMO_PASSWORD}(VIP,含历史委托与持仓)")
+            self.stdout.write(f"  + 演示账户 {DEMO_USERNAME}/{DEMO_PASSWORD}")
         else:
-            self.stdout.write(f"  = 演示账户 {DEMO_USERNAME} 已存在,跳过订单初始化")
+            self.stdout.write(f"  = 演示账户 {DEMO_USERNAME} 已存在")
+
+        # 3. 演示自选股:加入日期回填到过去,K 线标注落在可视窗口
+        now = timezone.localtime()
+        for symbol, days_ago in DEMO_FAVORITES:
+            fav, fav_created = Favorite.objects.get_or_create(
+                user=demo, stock=Stock.objects.get(symbol=symbol),
+            )
+            if fav_created:
+                fav.created_at = now - timedelta(days=days_ago)
+                fav.save(update_fields=["created_at"])
+        self.stdout.write(f"  + 演示自选 {len(DEMO_FAVORITES)} 只(加入日期已回填)")
 
         self.stdout.write(self.style.SUCCESS("演示数据就绪:python manage.py runserver 后访问前端即可体验"))

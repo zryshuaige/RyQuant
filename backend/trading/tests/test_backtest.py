@@ -89,17 +89,15 @@ class BacktestApiTests(BaseAPITestCase):
         self.stock.price = self.stock.price
         self.stock.save()
 
-    def test_requires_vip(self):
-        self.auth()
+    def test_requires_auth(self):
+        self.anon()
         resp = self.client.post("/api/backtest/", {
             "strategy": "ma_cross", "symbol": self.stock.symbol,
         }, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_activate_vip_then_run(self):
+    def test_run_contract(self):
         self.auth()
-        resp = self.client.post("/api/ai/activate/")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
         resp = self.client.post("/api/backtest/", {
             "strategy": "ma_cross", "symbol": self.stock.symbol,
             "params": {"fast": 5, "slow": 20}, "days": 150, "initial_capital": 100000,
@@ -113,13 +111,11 @@ class BacktestApiTests(BaseAPITestCase):
 
     def test_unknown_strategy(self):
         self.auth()
-        self.client.post("/api/ai/activate/")
         resp = self.client.post("/api/backtest/", {"strategy": "nope", "symbol": self.stock.symbol}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_history_and_detail(self):
         self.auth()
-        self.client.post("/api/ai/activate/")
         self.client.post("/api/backtest/", {"strategy": "rsi_reversion", "symbol": self.stock.symbol}, format="json")
         resp = self.client.get("/api/backtest/history/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -134,7 +130,6 @@ class BacktestApiTests(BaseAPITestCase):
                            active=False, kind="index")
         seed_daily_candles(index, count=200, seed="index-bt")
         self.auth()
-        self.client.post("/api/ai/activate/")
         resp = self.client.post("/api/backtest/", {
             "strategy": "ma_cross", "symbol": "sh000001", "days": 150,
         }, format="json")

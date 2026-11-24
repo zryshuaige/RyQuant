@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from trading.models import AIConversation, AIMessage, Candle, Stock
 from trading.services import market_sim
-from trading.services.trading import get_cash_account
 
 from .base import BaseAPITestCase, make_stock, seed_daily_candles
 
@@ -125,9 +124,6 @@ class RealTickTests(BaseAPITestCase):
 
 class AiContextTests(BaseAPITestCase):
     def test_history_uses_latest_messages(self):
-        cash = get_cash_account(self.user)
-        cash.is_vip = True
-        cash.save(update_fields=["is_vip"])
         conv = AIConversation.objects.create(user=self.user, title="t")
         for i in range(25):
             AIMessage.objects.create(conversation=conv, sender="user" if i % 2 == 0 else "bot",

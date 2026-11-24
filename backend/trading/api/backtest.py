@@ -9,7 +9,6 @@ from ..services.errors import BusinessError
 from ..serializers import BacktestRunDetailSerializer, BacktestRunListSerializer
 from ..services.quant import strategies as strategy_registry
 from ..services.quant.engine import run_backtest
-from .permissions import IsVip
 from .throttling import BacktestThrottle
 
 MIN_DAYS, MAX_DAYS = 30, 250
@@ -33,7 +32,7 @@ class BacktestRunView(APIView):
     返回完整回测结果(指标 / 资金曲线 / K 线 / 买卖点 / 逐笔),并持久化供历史回看。
     """
 
-    permission_classes = [IsAuthenticated, IsVip]
+    permission_classes = [IsAuthenticated]
     throttle_classes = [BacktestThrottle]
 
     def post(self, request):
@@ -114,7 +113,7 @@ class BacktestCompareView(APIView):
     跨策略有效性对比:同窗口默认参数 + 滚动样本外 + 分 regime 评估 + 排名;结果不持久化。
     """
 
-    permission_classes = [IsAuthenticated, IsVip]
+    permission_classes = [IsAuthenticated]
     throttle_classes = [BacktestThrottle]
 
     def post(self, request):
@@ -168,7 +167,7 @@ def timezone_local(dt):
 class BacktestHistoryView(APIView):
     """GET /api/backtest/history/ — 本人回测历史(列表轻量化,不含曲线数据)。"""
 
-    permission_classes = [IsAuthenticated, IsVip]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         runs = BacktestRun.objects.filter(user=request.user)[:50]
@@ -178,7 +177,7 @@ class BacktestHistoryView(APIView):
 class BacktestDetailView(APIView):
     """GET /api/backtest/history/<id>/ — 单次回测完整结果。"""
 
-    permission_classes = [IsAuthenticated, IsVip]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
         run = get_object_or_404(BacktestRun, pk=pk, user=request.user)

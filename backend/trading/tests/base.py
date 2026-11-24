@@ -5,8 +5,7 @@ from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from trading.models import CashAccount, Candle, Position, Stock
-from trading.services.trading import place_order
+from trading.models import Candle, Stock
 
 TWO = Decimal("0.01")
 
@@ -64,21 +63,3 @@ class BaseAPITestCase(APITestCase):
 
     def anon(self):
         self.client.credentials()
-
-    @staticmethod
-    def buy(user, stock, quantity, price=None, **kwargs):
-        return place_order(user, stock, side="BUY", quantity=quantity,
-                           order_type="LIMIT", price=price or stock.price, **kwargs)
-
-    @staticmethod
-    def sell(user, stock, quantity, price=None, **kwargs):
-        return place_order(user, stock, side="SELL", quantity=quantity,
-                           order_type="LIMIT", price=price or stock.price, **kwargs)
-
-    @staticmethod
-    def give_position(user, stock, quantity=200, price="13.00"):
-        """绕过撮合直接构造持仓(测试卖出场景)。"""
-        return Position.objects.create(
-            user=user, stock=stock, quantity=quantity, available_quantity=quantity,
-            avg_price=Decimal(price),
-        )

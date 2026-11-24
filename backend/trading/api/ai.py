@@ -1,27 +1,13 @@
-"""AI 助手:VIP 开通与问答(服务端 VIP 强制校验 + 限流)。"""
+"""AI 助手:问答(登录即可)与会话延续。"""
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import AIConversation, AIMessage
 from ..services.errors import BusinessError
-from ..serializers import AIConversationSerializer, CashAccountSerializer
+from ..serializers import AIConversationSerializer
 from ..services.ai_client import get_ai_reply
-from ..services.trading import get_cash_account
-from .permissions import IsVip
 from .throttling import AIThrottle
-
-
-class ActivateVipView(APIView):
-    """POST /api/ai/activate/ — 模拟开通 VIP(旧契约:{detail, is_vip, cash})。"""
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        cash = get_cash_account(request.user)
-        cash.is_vip = True
-        cash.save(update_fields=["is_vip", "updated_at"])
-        return Response({"detail": "activated", "is_vip": True, "cash": CashAccountSerializer(cash).data})
 
 
 class AIQueryView(APIView):
@@ -30,7 +16,7 @@ class AIQueryView(APIView):
     未传 conversation_id 时新建会话;传入本人会话 id 则续聊(携带历史上下文)。
     """
 
-    permission_classes = [IsAuthenticated, IsVip]
+    permission_classes = [IsAuthenticated]
     throttle_classes = [AIThrottle]
 
     def post(self, request):

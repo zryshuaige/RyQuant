@@ -102,7 +102,6 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": False,  # Decimal 序列化为 JSON 数值,保持旧接口数字类型
     "DEFAULT_THROTTLE_RATES": {
         "auth": "30/min",
-        "order": "30/min",
         "backtest": "10/min",
         "ai": "10/min",
     },
@@ -116,10 +115,9 @@ CORS_ALLOW_CREDENTIALS = False
 MARKET_SIMULATION_ENABLED = env_bool("MARKET_SIMULATION", True)
 SIMULATOR_TICK_SECONDS = float(os.getenv("SIMULATOR_TICK_SECONDS", "3"))
 
-# 交易参数
+# 回测费用参数(与真实 A 股费率一致)
 from decimal import Decimal  # noqa: E402
 
-INITIAL_CAPITAL = Decimal(os.getenv("INITIAL_CAPITAL", "100000")).quantize(Decimal("0.01"))
 FEES = {
     "COMMISSION_RATE": Decimal(os.getenv("COMMISSION_RATE", "0.00025")),  # 佣金万 2.5
     "COMMISSION_MIN": Decimal(os.getenv("COMMISSION_MIN", "5")),          # 最低 5 元

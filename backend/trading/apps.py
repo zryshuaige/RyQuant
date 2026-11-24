@@ -6,11 +6,9 @@ from django.apps import AppConfig
 class TradingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "trading"
-    verbose_name = "模拟交易"
+    verbose_name = "量化终端"
 
     def ready(self):
-        from . import signals  # noqa: F401  注册信号
-
         # 行情模拟器只在 runserver 实际服务的进程里启动:
         # - autoreload 模式:仅子进程(RUN_MAIN=true)启动,父进程跳过
         # - --noreload 模式:直接启动

@@ -34,18 +34,3 @@ class Candle(models.Model):
         return f"{self.stock.symbol} {self.period} {self.time:%Y-%m-%d %H:%M} C:{self.close}"
 
 
-class NewsItem(models.Model):
-    """资讯(种子数据,可在 admin 维护)。"""
-
-    title = models.CharField("标题", max_length=200)
-    summary = models.TextField("摘要", blank=True, default="")
-    source = models.CharField("来源", max_length=64, default="模拟财经")
-    published_at = models.DateTimeField("发布时间")
-
-    class Meta:
-        ordering = ["-published_at"]
-        verbose_name = "资讯"
-        verbose_name_plural = verbose_name
-
-    def __str__(self):
-        return self.title

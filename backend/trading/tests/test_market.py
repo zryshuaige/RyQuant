@@ -1,37 +1,7 @@
-"""持仓汇总与行情接口契约。"""
-from decimal import Decimal
-
+"""行情与自选接口契约。"""
 from rest_framework import status
 
-from trading.models import NewsItem
-
 from .base import BaseAPITestCase, make_stock, seed_daily_candles
-from django.utils import timezone
-
-
-class PositionsTests(BaseAPITestCase):
-    def test_positions_envelope_and_math(self):
-        self.give_position(self.user, self.stock, quantity=200, price="13.00")
-        self.auth()
-        resp = self.client.get("/api/positions/")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = resp.data
-        for key in ("cash", "total_market_value", "total_unrealized_pl", "details"):
-            self.assertIn(key, data)
-        self.assertEqual(set(data["cash"].keys()), {"balance", "frozen_cash", "is_vip"})
-        detail = data["details"][0]
-        for key in ("position_id", "stock_id", "symbol", "name", "quantity", "available_quantity",
-                    "avg_price", "market_price", "market_value", "unrealized_pl"):
-            self.assertIn(key, detail)
-        self.assertEqual(detail["market_value"], 13.88 * 200)
-        self.assertEqual(detail["unrealized_pl"], round((13.88 - 13.00) * 200, 2))
-        self.assertEqual(data["total_market_value"], 2776.0)
-        self.assertEqual(data["total_unrealized_pl"], 176.0)
-
-    def test_positions_requires_auth(self):
-        self.anon()
-        resp = self.client.get("/api/positions/")
-        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class MarketApiTests(BaseAPITestCase):
@@ -40,7 +10,7 @@ class MarketApiTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         stock = resp.data[0]
         for key in ("id", "symbol", "name", "price", "prev_close", "change", "change_pct",
-                    "limit_pct", "lot_size", "is_active"):
+                    "limit_pct", "lot_size", "is_active", "quote_source"):
             self.assertIn(key, stock)
 
     def test_stocks_exclude_indices(self):
@@ -73,14 +43,6 @@ class MarketApiTests(BaseAPITestCase):
         self.assertEqual(real["prev_close"], 3956.57)
         self.assertEqual(real["change_pct"], round((3952.18 - 3956.57) / 3956.57 * 100, 2))
 
-    def test_cannot_order_index(self):
-        from trading.services.errors import BusinessError
-
-        index = make_stock("sh000001", "上证指数", price="3952.00", prev_close="3956.00",
-                           active=False, kind="index")
-        with self.assertRaises(BusinessError):
-            self.buy(self.user, index, 100, price=Decimal("3952.00"))
-
     def test_kline_contract(self):
         seed_daily_candles(self.stock, count=80, seed="kline")
         resp = self.client.get("/api/kline/", {"symbol": self.stock.symbol, "limit": 30})
@@ -111,14 +73,6 @@ class MarketApiTests(BaseAPITestCase):
             self.assertIn("change_pct", s)
             self.assertIn("values", s)
 
-    def test_news_contract(self):
-        now = timezone.now()
-        NewsItem.objects.create(title="标题", summary="摘要", published_at=now)
-        resp = self.client.get("/api/news/")
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIsInstance(resp.data, list)
-        self.assertEqual(resp.data[0]["title"], "标题")
-
 
 class FavoritesTests(BaseAPITestCase):
     def test_favorite_crud(self):
@@ -127,6 +81,7 @@ class FavoritesTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         fav_id = resp.data["id"]
         self.assertEqual(resp.data["stock"]["symbol"], self.stock.symbol)
+        self.assertIn("created_at", resp.data)  # 加入日期,K 线标注依赖
 
         resp = self.client.get("/api/favorites/")
         self.assertEqual(len(resp.data), 1)

@@ -6,7 +6,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import Candle, NewsItem, Stock
+from ..models import Candle, Stock
 from ..services.errors import BusinessError
 from ..services.market_data import SECTOR_MEMBERS
 from ..serializers import StockSerializer
@@ -155,11 +155,3 @@ class MarketPulseView(APIView):
         return Response(market_pulse())
 
 
-class NewsView(APIView):
-    def get(self, request):
-        news = NewsItem.objects.all()[:10]
-        return Response([
-            {"id": n.id, "title": n.title, "summary": n.summary,
-             "source": n.source, "ts": timezone.localtime(n.published_at).isoformat()}
-            for n in news
-        ])

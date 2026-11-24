@@ -83,19 +83,12 @@ class CompareApiTests(BaseAPITestCase):
                                 prev_close="2990.00", active=False, kind=Stock.Kind.INDEX)
         seed_daily_candles(self.index, count=120, seed="idx-cmp")
 
-    def _vip(self):
-        from trading.services.trading import get_cash_account
-        cash = get_cash_account(self.user)
-        cash.is_vip = True
-        cash.save(update_fields=["is_vip"])
-
-    def test_requires_vip(self):
-        self.auth()
+    def test_requires_auth(self):
+        self.anon()
         resp = self.client.post("/api/backtest/compare/", {"symbol": "000001"}, format="json")
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
     def test_compare_contract(self):
-        self._vip()
         self.auth()
         resp = self.client.post("/api/backtest/compare/",
                                 {"symbol": "000001", "days": 120}, format="json")
@@ -107,7 +100,6 @@ class CompareApiTests(BaseAPITestCase):
         self.assertEqual(data["results"][0]["rank"], 1)
 
     def test_unknown_strategy_list_400(self):
-        self._vip()
         self.auth()
         resp = self.client.post("/api/backtest/compare/",
                                 {"symbol": "000001", "strategies": ["nope"]}, format="json")
