@@ -15,6 +15,17 @@ export default defineConfig({
       "/static": { target: backendOrigin, changeOrigin: true },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // echarts 独立共享 chunk:多路由共用一份,利于长期缓存
+        manualChunks(id) {
+          if (id.includes("node_modules/echarts")) return "vendor-echarts";
+          if (id.includes("node_modules")) return "vendor";
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.js"],

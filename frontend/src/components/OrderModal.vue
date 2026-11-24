@@ -159,7 +159,7 @@ async function submit() {
           <button class="btn btn-sm btn-ghost" @click="setPrice(0.98)">跌2%</button>
           <button class="btn btn-sm btn-ghost" @click="setPrice(1)">现价</button>
           <button class="btn btn-sm btn-ghost" @click="setPrice(1.02)">涨2%</button>
-          <button class="btn btn-sm btn-ghost" @click="setPrice(limitHigh / Number(stock.price || 1))">涨停</button>
+          <button class="btn btn-sm btn-ghost" @click="price = limitHigh.toFixed(2)">涨停</button>
         </div>
       </div>
 
@@ -204,7 +204,7 @@ async function submit() {
 .order-body { display: flex; flex-direction: column; gap: 4px; }
 .stock-line { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; flex-wrap: wrap; }
 .price { font-size: 20px; font-weight: 800; }
-.hint { font-size: 11.5px; color: var(--text-3); }
+.hint { font-size: 11px; color: var(--text-3); }
 .seg-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .seg { display: flex; background: var(--inset-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 3px; gap: 3px; }
 .seg button {

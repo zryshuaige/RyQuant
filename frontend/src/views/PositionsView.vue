@@ -294,7 +294,7 @@ function openOrderModal(detail, side) {
 .stat-card { padding: 14px 16px; }
 .stat-label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 5px; }
 .stat-value { font-size: 20px; font-weight: 800; }
-.live-hint { margin-left: auto; align-self: center; color: var(--text-3); font-size: 11.5px; display: inline-flex; gap: 6px; align-items: center; }
+.live-hint { margin-left: auto; align-self: center; color: var(--text-3); font-size: 11px; display: inline-flex; gap: 6px; align-items: center; }
 .actions { display: flex; gap: 7px; }
 .dim { color: var(--text-3); }
 .bold { font-weight: 700; }

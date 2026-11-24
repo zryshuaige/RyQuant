@@ -29,7 +29,7 @@ router.beforeEach((to) => {
 });
 
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${to.meta.title} · FinQuant` : "FinQuant";
+  document.title = to.meta.title ? `${to.meta.title} · RyQuant` : "RyQuant";
 });
 
 export default router;

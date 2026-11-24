@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import AppIcon from "../components/AppIcon.vue";
 import { toast } from "../composables/useToast";
 
 const route = useRoute();
@@ -34,7 +35,7 @@ async function submit() {
   <div class="page auth-page">
     <div class="panel-gradient auth-card">
       <form class="panel" style="border: none" @submit.prevent="submit">
-        <h1 class="auth-title">登录 <em>FinQuant</em></h1>
+        <h1 class="auth-title">登录 <em>RyQuant</em></h1>
         <p class="auth-sub">连接你的模拟交易账户</p>
 
         <div class="field">
@@ -46,7 +47,7 @@ async function submit() {
           <input id="login-password" v-model="password" class="input" type="password" autocomplete="current-password" placeholder="密码" />
         </div>
 
-        <div v-if="error" class="field-error" role="alert">⚠ {{ error }}</div>
+        <div v-if="error" class="field-error" role="alert"><AppIcon name="warn" :size="13" /> {{ error }}</div>
 
         <button class="btn btn-primary btn-block" type="submit" :disabled="loading" style="margin-top: 10px">
           <span v-if="loading" class="spinner"></span>
@@ -83,7 +84,7 @@ async function submit() {
   border: 1px dashed rgba(246, 196, 83, 0.45);
   border-radius: var(--radius);
   color: var(--text-2);
-  font-size: 12.5px;
+  font-size: 12px;
   text-align: center;
 }
 .demo-box strong { color: var(--gold); margin-right: 6px; }

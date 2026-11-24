@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import AppIcon from "../components/AppIcon.vue";
 import { toast } from "../composables/useToast";
 
 const route = useRoute();
@@ -50,7 +51,7 @@ async function submit() {
     <div class="panel-gradient auth-card">
       <form class="panel" style="border: none" @submit.prevent="submit">
         <h1 class="auth-title">创建账户</h1>
-        <p class="auth-sub">加入 FinQuant · 体验完整模拟交易闭环</p>
+        <p class="auth-sub">加入 RyQuant · 体验完整模拟交易闭环</p>
 
         <div class="field">
           <label for="reg-username">用户名</label>
@@ -69,7 +70,7 @@ async function submit() {
           <input id="reg-confirm" v-model="confirm" class="input" type="password" autocomplete="new-password" placeholder="再次输入密码" />
         </div>
 
-        <div v-if="error" class="field-error" role="alert">⚠ {{ error }}</div>
+        <div v-if="error" class="field-error" role="alert"><AppIcon name="warn" :size="13" /> {{ error }}</div>
 
         <button class="btn btn-primary btn-block" type="submit" :disabled="loading" style="margin-top: 10px">
           <span v-if="loading" class="spinner"></span>

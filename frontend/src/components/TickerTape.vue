@@ -26,6 +26,9 @@ const items = () => (market.indices.length ? [...market.indices, ...market.indic
   border-bottom: 1px solid var(--border);
   background: var(--header-bg);
   white-space: nowrap;
+  /* 边缘渐隐,避免跑马灯条目在viewport边缘被拦腰截断 */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
 }
 .tape-track {
   display: inline-flex;
@@ -39,8 +42,8 @@ const items = () => (market.indices.length ? [...market.indices, ...market.indic
   align-items: center;
   gap: 8px;
   padding: 0 26px;
-  font-size: 12.5px;
-  border-right: 1px solid rgba(124, 144, 196, 0.14);
+  font-size: 12px;
+  border-right: 1px solid var(--border);
 }
 .tape-name { color: var(--text-2); font-weight: 600; }
 .tape-loading { color: var(--text-3); border: none; animation: none; }

@@ -1,12 +1,15 @@
 <script setup>
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { theme, toggleTheme } from "../composables/useTheme";
 import VipBadge from "./VipBadge.vue";
+import AppIcon from "./AppIcon.vue";
 import { toast } from "../composables/useToast";
 
 const router = useRouter();
 const auth = useAuthStore();
+const menuOpen = ref(false);
 
 const navItems = [
   { to: "/", label: "行情总览", exact: true },
@@ -26,7 +29,7 @@ function logout() {
 <template>
   <header class="header">
     <div class="header-inner">
-      <router-link to="/" class="brand" aria-label="FinQuant 首页">
+      <router-link to="/" class="brand" aria-label="RyQuant 首页">
         <svg class="brand-mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
           <defs>
             <linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1">
@@ -38,12 +41,17 @@ function logout() {
             stroke-linecap="round" stroke-linejoin="round" />
           <circle cx="27" cy="6" r="3.4" fill="url(#brand-g)" />
         </svg>
-        <span class="brand-name">Fin<em>Quant</em></span>
+        <span class="brand-name">Ry<em>Quant</em></span>
       </router-link>
 
-      <nav class="nav" aria-label="主导航">
+      <button class="btn btn-sm btn-ghost nav-burger" :aria-expanded="menuOpen" aria-label="打开导航"
+        @click="menuOpen = !menuOpen">
+        <AppIcon name="menu" :size="18" />
+      </button>
+
+      <nav class="nav" :class="{ open: menuOpen }" aria-label="主导航">
         <router-link v-for="item in navItems" :key="item.to" :to="item.to"
-          class="nav-link" :class="{ exact: item.exact }">
+          class="nav-link" :class="{ exact: item.exact }" @click="menuOpen = false">
           {{ item.label }}
           <span v-if="item.vip && !auth.isVip" class="vip-dot" title="需要 VIP">●</span>
         </router-link>
@@ -52,7 +60,7 @@ function logout() {
       <div class="auth-area">
         <button class="btn btn-sm btn-ghost theme-toggle" :title="theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
           :aria-label="theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'" @click="toggleTheme">
-          {{ theme === "dark" ? "☀️" : "🌙" }}
+          <AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
         </button>
         <template v-if="auth.isLoggedIn">
           <button v-if="!auth.isVip" class="btn btn-sm" @click="$router.push('/backtest')">
@@ -110,12 +118,12 @@ function logout() {
   padding: 7px 13px;
   border-radius: var(--radius-sm);
   color: var(--text-2);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   transition: color 0.2s, background 0.2s;
 }
-.nav-link:hover { color: var(--text-1); background: rgba(124, 144, 196, 0.1); }
+.nav-link:hover { color: var(--text-1); background: var(--hover-bg); }
 .nav-link.router-link-active:not(.exact) { color: var(--text-1); }
 .nav-link.router-link-exact-active,
 .nav-link.exact.router-link-active { color: var(--text-1); }
@@ -154,8 +162,26 @@ function logout() {
   flex: none;
 }
 .gold-text { color: var(--gold); font-weight: 800; }
+.nav-burger { display: none; margin-left: auto; }
 @media (max-width: 860px) {
-  .header-inner { gap: 10px; height: auto; padding: 9px 14px; flex-wrap: wrap; }
-  .nav { order: 3; width: 100%; }
+  .header-inner { gap: 10px; padding: 9px 14px; }
+  .nav-burger { display: inline-flex; }
+  /* 抽屉式导航:覆盖在内容上方,不再挤压换行 */
+  .nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2);
+    background: var(--panel-solid);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-1);
+  }
+  .nav.open { display: flex; }
+  .nav-link { padding: 10px 14px; }
+  .nav-link.router-link-active::after { display: none; }
 }
 </style>

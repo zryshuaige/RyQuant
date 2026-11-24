@@ -22,7 +22,7 @@ onUnmounted(() => market.stopPolling());
     </router-view>
   </main>
   <footer class="app-footer">
-    FinQuant 模拟交易终端 · 所有行情与资金均为模拟数据,仅供学习 ·
+    RyQuant 模拟交易终端 · 所有资金均为模拟数据,仅供学习 ·
     <a href="/admin/" target="_blank" rel="noopener">后台管理</a>
   </footer>
   <ToastHost />

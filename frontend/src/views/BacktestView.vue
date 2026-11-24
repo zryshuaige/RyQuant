@@ -9,6 +9,7 @@ import {
 import { fmtMoney, fmtSigned, fmtPct, fmtDateTime, trendClass } from "../utils/format";
 import BacktestChart from "../components/BacktestChart.vue";
 import CompareChart from "../components/CompareChart.vue";
+import AppIcon from "../components/AppIcon.vue";
 import AnimatedNumber from "../components/AnimatedNumber.vue";
 import EmptyState from "../components/EmptyState.vue";
 import VipBadge from "../components/VipBadge.vue";
@@ -161,7 +162,7 @@ function strategyName(id) {
     <!-- 未开通 VIP 的引导卡片 -->
     <div v-if="!auth.isVip" class="vip-gate panel-gradient">
       <div class="panel vip-inner" style="border: none">
-        <div class="lock">🔒</div>
+        <div class="lock"><AppIcon name="lock" :size="40" /></div>
         <h1 class="vip-title">量化策略回测</h1>
         <p class="vip-sub">
           内置双均线 / MACD / RSI / 布林带四大经典策略,在 <strong>250 个交易日</strong>的真实模拟 K 线上
@@ -280,7 +281,7 @@ function strategyName(id) {
           </section>
         </template>
         <section v-else class="panel section-gap">
-          <EmptyState glyph="⚖" title="选择标的后点击「运行对比」"
+          <EmptyState icon="scale" title="选择标的后点击「运行对比」"
             sub="四大策略同场竞技:样本外收益、Sharpe、分行情状态表现与折间稳定性" />
         </section>
       </div>
@@ -337,7 +338,7 @@ function strategyName(id) {
         <section class="result-panel">
             <div v-if="result" class="result">
               <div v-if="!result.markers.length" class="panel section-gap hint-bar">
-                ⚠ 本次回测没有产生任何成交——通常是初始资金不足买入一手(该标的现价约 {{ fmtMoney(result.candles.at(-1)?.close) }}/股,一手需 {{ fmtMoney((result.candles.at(-1)?.close || 0) * 100) }}),试着调高初始资金或换标的。
+                <AppIcon name="warn" :size="14" /> 本次回测没有产生任何成交——通常是初始资金不足买入一手(该标的现价约 {{ fmtMoney(result.candles.at(-1)?.close) }}/股,一手需 {{ fmtMoney((result.candles.at(-1)?.close || 0) * 100) }}),试着调高初始资金或换标的。
               </div>
             <div class="metric-row">
               <div v-for="m in metricCards" :key="m.label" class="panel stat-card">
@@ -377,7 +378,7 @@ function strategyName(id) {
             </div>
           </div>
           <div v-else class="panel section-gap">
-            <EmptyState glyph="📈" title="配置策略后点击「运行回测」"
+            <EmptyState icon="chart" title="配置策略后点击「运行回测」"
               sub="结果将展示资金曲线、买卖点标记与逐笔绩效" />
           </div>
 
@@ -404,7 +405,7 @@ function strategyName(id) {
 <style scoped>
 .vip-gate { max-width: 640px; margin: 6vh auto 0; }
 .vip-inner { text-align: center; padding: 44px 36px; }
-.lock { font-size: 44px; margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(246, 196, 83, 0.4)); }
+.lock { color: var(--gold); margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(246, 196, 83, 0.4)); }
 .vip-title {
   font-size: 30px;
   background: linear-gradient(120deg, #f6c453, #ff9d5c 60%, #f6c453);
@@ -420,7 +421,7 @@ function strategyName(id) {
   max-width: 380px;
   text-align: left;
   color: var(--text-2);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .vip-perks li { padding: 5px 0; }
 .btn-lg { padding: 12px 26px; font-size: 15px; }
@@ -464,7 +465,7 @@ function strategyName(id) {
 .rank-top { color: var(--gold); }
 .regime-meta { display: block; font-size: 11px; margin-top: 2px; }
 .stat-card { padding: 12px 14px; }
-.stat-label { display: block; font-size: 11.5px; color: var(--text-3); margin-bottom: 4px; }
+.stat-label { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
 .stat-value { font-size: 19px; font-weight: 800; }
 .history-list { display: grid; gap: 7px; max-height: 260px; overflow-y: auto; }
 .history-item {
@@ -482,7 +483,7 @@ function strategyName(id) {
 }
 .history-item:hover { border-color: var(--brand-a); background: rgba(34, 211, 238, 0.06); }
 .h-strategy { flex: 1; text-align: left; font-weight: 600; color: var(--text-1); }
-.h-time { font-size: 11.5px; }
+.h-time { font-size: 11px; }
 .dim { color: var(--text-3); }
 .bold { font-weight: 700; }
 .hint-bar {
@@ -493,6 +494,9 @@ function strategyName(id) {
   color: var(--warn);
   font-size: 13px;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 @media (max-width: 1020px) {
   .bt-grid { grid-template-columns: 1fr; }

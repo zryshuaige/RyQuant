@@ -21,6 +21,7 @@ const search = ref("");
 const klineTarget = ref({ symbol: "sh000001", name: "上证指数" }); // 默认看上证指数
 
 const news = ref([]);
+const newsError = ref(false);
 const account = ref(null); // 持仓汇总(已登录时展示)
 const pulse = ref(null); // 市场脉冲(60s 刷新,服务端亦有 TTL 缓存)
 let pulseTimer = null;
@@ -64,7 +65,7 @@ async function onPlaced() {
 onMounted(async () => {
   if (!market.stocks.length) await market.refreshAll();
   if (!selected.value && market.activeStocks.length) selected.value = market.activeStocks[0];
-  fetchNews().then((list) => (news.value = list)).catch(() => {});
+  fetchNews().then((list) => (news.value = list)).catch(() => (newsError.value = true));
   if (auth.isLoggedIn) {
     fetchPositions().then((d) => (account.value = d)).catch(() => {});
   }
@@ -165,7 +166,11 @@ onUnmounted(() => clearInterval(pulseTimer));
               <div class="news-meta">{{ n.source }} · {{ fmtDateTime(n.ts) }}</div>
             </div>
           </li>
-          <li v-if="!news.length" class="news-item"><div class="news-meta">加载中…</div></li>
+          <li v-if="!news.length && !newsError" class="news-item"><div class="news-meta">加载中…</div></li>
+          <li v-if="newsError && !news.length" class="news-item">
+            <div class="news-meta">快讯加载失败,稍后自动重试</div>
+          </li>
+          <li v-if="!newsError && !news.length" class="news-item"><div class="news-meta">暂无快讯</div></li>
         </ul>
       </div>
     </section>
@@ -226,8 +231,8 @@ onUnmounted(() => clearInterval(pulseTimer));
 .news-item { display: flex; gap: 10px; padding: 11px 2px; border-bottom: 1px dashed var(--border); }
 .news-item:last-child { border-bottom: none; }
 .news-dot { width: 7px; height: 7px; margin-top: 8px; border-radius: 50%; background: var(--brand-a); flex: none; box-shadow: var(--glow-brand); }
-.news-title { font-size: 13.5px; font-weight: 600; }
-.news-meta { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.news-title { font-size: 13px; font-weight: 600; }
+.news-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 .search { max-width: 230px; font-size: 13px; padding: 7px 12px; }
 .kline-tabs { display: flex; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
 .kline-chip.chip-on { border-color: var(--brand-a); color: var(--brand-a); box-shadow: var(--glow-brand); }

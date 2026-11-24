@@ -6,6 +6,7 @@ import { CandlestickChart, LineChart, BarChart } from "echarts/charts";
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { fetchKline } from "../api";
+import { useMarketStore } from "../stores/market";
 import { chartColors, theme } from "../utils/chartTheme";
 import { fmtMoney, fmtPct, trendClass } from "../utils/format";
 
@@ -23,14 +24,23 @@ const el = ref(null);
 const loading = ref(false);
 const error = ref("");
 const lastData = ref(null); // 缓存数据,主题切换时重绘
+const market = useMarketStore();
+// 头部口径与行情卡片统一:优先 store 实时报价(change_pct 基于昨收),无则回退 K 线推导
+const liveQuote = computed(() => {
+  const s = market.stocks.find((x) => x.symbol === props.symbol)
+    || market.indices.find((x) => x.symbol === props.symbol);
+  if (!s) return null;
+  return { price: Number(s.price ?? s.current), change: Number(s.change), changePct: Number(s.change_pct), source: s.quote_source };
+});
 const quote = computed(() => {
+  if (liveQuote.value) return liveQuote.value;
   const d = lastData.value;
   if (!d || d.klines.length < 2) return null;
   const closes = d.klines.map((k) => k[1]);
   const last = closes[closes.length - 1];
   const prev = closes[closes.length - 2];
   const change = last - prev;
-  return { price: last, change, changePct: prev ? (change / prev) * 100 : 0 };
+  return { price: last, change, changePct: prev ? (change / prev) * 100 : 0, source: d.quote_source };
 });
 
 let chart = null;
@@ -113,9 +123,10 @@ function buildOption(data) {
         name: "成交量", type: "bar", xAxisIndex: 1, yAxisIndex: 1,
         data: volumes || [],
         itemStyle: {
+          // 量柱颜色读主题 token(浅色主题不再残留深色 rgba)
           color: (p) => (klines[p.dataIndex] && klines[p.dataIndex][1] >= klines[p.dataIndex][0]
-            ? "rgba(255,77,94,0.55)"
-            : "rgba(0,212,156,0.55)"),
+            ? c.up + "8c"
+            : c.down + "8c"),
           borderRadius: 1,
         },
         barWidth: "60%",
@@ -175,12 +186,18 @@ onBeforeUnmount(() => {
         <span class="kline-title">
           {{ name || symbol }}
           <span class="symbol-badge">{{ symbol }}</span>
+          <span v-if="quote?.source" class="tag src-tag" :class="quote.source === 'real' ? 'tag-ok' : 'tag-muted'">
+            {{ quote.source === "real" ? "真实" : "模拟" }}
+          </span>
           <template v-if="quote">
             <span class="quote-price num" :class="trendClass(quote.change)">{{ fmtMoney(quote.price) }}</span>
             <span class="pct-pill" :class="trendClass(quote.change)">{{ fmtPct(quote.changePct) }}</span>
           </template>
         </span>
-        <span class="hint"><span v-if="loading" class="spinner"></span> 实时模拟行情</span>
+        <span class="hint">
+          <span v-if="loading" class="spinner"></span>
+          {{ quote?.source === "real" ? "实时行情 · 腾讯" : "模拟行情" }}
+        </span>
       </h3>
     </div>
     <div v-if="error" class="kline-error">{{ error }}</div>
@@ -192,6 +209,7 @@ onBeforeUnmount(() => {
 .kline-wrap { position: relative; }
 .chart { width: 100%; }
 .kline-title { display: inline-flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.src-tag { font-size: 10px; padding: 1px 6px; }
 .quote-price { font-size: 19px; font-weight: 800; }
 .kline-error {
   position: absolute;

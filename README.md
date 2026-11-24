@@ -1,4 +1,4 @@
-# FinQuant · 模拟交易终端
+# RyQuant · 模拟交易终端
 
 ![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/Django-4.2%20LTS-092E20?logo=django&logoColor=white)
@@ -11,9 +11,9 @@
 ![Axios](https://img.shields.io/badge/Axios-1.x-5A29E4?logo=axios&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-3-6E9F18?logo=vitest&logoColor=white)
 
-一个功能闭环的**模拟股票交易平台**:Django + DRF 后端(撮合引擎 / 行情模拟器 / 资金冻结结算 / VIP 量化回测)+ Vue 3 深色金融终端前端。指数与个股历史行情来自真实数据源,离线亦可运行;所有资金均为模拟数据。
+一个功能闭环的**模拟股票交易平台**:Django + DRF 后端(撮合引擎 / 真实行情接入 / 资金冻结结算 / 市场脉冲推断 / 策略有效性对比 / VIP 量化回测)+ Vue 3 深色金融终端前端。指数与个股实时行情、历史日 K 均来自真实数据源(失败自动回退模拟并全程标注来源),离线亦可运行;所有资金均为模拟数据。
 
-![FinQuant 首页](docs/home.png)
+![RyQuant 首页](docs/home.png)
 
 ## 功能总览
 
@@ -26,10 +26,18 @@
 
 **行情与真实数据**
 
-- 股票:后台线程每 3 秒随机游走(受涨跌停约束),聚合分钟 / 日 K 线,驱动撮合
-- 指数(上证 / 深证 / 创业板):每 tick 抓取**腾讯实时真实行情**,失败自动回退随机游走
-- 历史日 K:`seed_demo` 优先抓取腾讯真实数据(前复权 250 根),失败回退网易源、再回退随机模拟,离线不受影响
+- 个股与指数:每 tick 一次批量抓取**腾讯实时真实行情**(完整格式,字段自校验防错位),逐标的失败回退随机游走(受涨跌停约束),聚合分钟 / 日 K 线并驱动撮合
+- 来源可追溯:`Stock.quote_source` / `Candle.source` 记录真实 / 模拟,前端列表、指数卡、K 线头部全程「真实 / 模拟」徽章
+- 历史日 K:`seed_demo` 优先抓取腾讯真实数据(前复权 250 根),失败回退网易源、再回退随机模拟;运行期每交易日自动增量补抓真实日 K,离线不受影响
 - 一键升级 / 刷新真实历史:`python manage.py seed_demo --refresh-history`
+- 板块行情由成分股真实日 K / 报价计算,不再虚构
+
+**市场脉冲与策略有效性**
+
+- 市场脉冲 `GET /api/market/pulse/`:涨跌家数 / 站上 MA20 比例 / 均线趋势与斜率 / 20 日波动率分位 → 规则化判定多头 / 空头 / 震荡 / 高波动,附证据链;离线可用,60s 缓存
+- AI 投研助手离线与 DeepSeek 双路径均注入脉冲上下文
+- 策略对比 `POST /api/backtest/compare/`:四策略同窗口默认参数 → 全窗口指标 + 滚动 3 折样本外 + 分 regime 条件化评估 + 排名(OOS Sharpe 主排序);信号仅用历史收盘,无未来函数
+- 回测指标含 Sharpe / 波动率 / 盈亏比 / Calmar / 仓位暴露 / 平均持仓天数
 
 **VIP 量化回测**
 
@@ -112,7 +120,8 @@ npm run dev                       # http://localhost:5173(默认代理指向 127
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/register/` `/login/` | 注册 / 登录 → `{token, user}` |
-| GET | `/stocks/` `/indices/` `/kline/` `/sectors/` `/news/` | 行情(公开) |
+| GET | `/stocks/` `/indices/` `/kline/` `/sectors/` `/news/` | 行情(公开,含来源标注) |
+| GET | `/market/pulse/` | 市场脉冲:regime / 广度 / 板块热度(公开) |
 | GET/POST/DELETE | `/favorites/` `(/<id>/)` | 自选股 |
 | POST | `/order/`(旧别名)`/orders/` | 下单 → `{order, cash}` |
 | GET | `/orders/?status=&active=1` | 委托列表(含状态) |
@@ -122,6 +131,7 @@ npm run dev                       # http://localhost:5173(默认代理指向 127
 | POST | `/ai/activate/` `/ai/query/` | VIP 开通 / AI 问答(VIP) |
 | GET | `/strategies/` | 回测策略与参数 schema |
 | POST | `/backtest/` | 运行回测(VIP,限流 10/min) |
+| POST | `/backtest/compare/` | 跨策略有效性对比(VIP,限流 10/min,不持久化) |
 | GET | `/backtest/history/(/<id>/)` | 回测历史 / 详情 |
 
 ## 测试
@@ -141,9 +151,16 @@ cd backend && python smoke_test.py
 
 - 设置强 `SECRET_KEY`、`DEBUG=0`、明确的 `ALLOWED_HOSTS` 与 `CORS_ALLOWED_ORIGINS`
 - 前端 `npm run build` 后由 Nginx 托管 `dist/`,并将 `/api` 反代到 Django(gunicorn / uwsgi);
-  行情模拟器随 runserver 自动启动,生产可用常驻任务循环调用 `trading.services.market_sim.tick`
+  行情模拟器随 runserver 自动启动;生产部署另起常驻进程:`python manage.py run_simulator`
 - SQLite 适用于演示;高并发建议切换 PostgreSQL(仅改 `DATABASES`)
 - 真实行情依赖腾讯公网接口,若有代理 / 白名单要求请自行调整 `services/market_sim.py` 与 `seed_demo`
+
+## 路线图(与轻量目标权衡后留待后续)
+
+- 策略评估进阶:Deflated Sharpe Ratio / PBO(CPCV)/ 参数网格优化与参数高原分析
+- 行情推断进阶:HMM regime switching、情绪因子(FinBERT 类)
+- 组合 / 多标的回测、仓位管理选项、滑点模型
+- WebSocket 推送替代轮询;原生 App 打包
 
 ## 免责声明
 

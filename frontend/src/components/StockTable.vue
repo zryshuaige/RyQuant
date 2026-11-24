@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from "vue";
 import AnimatedNumber from "./AnimatedNumber.vue";
+import AppIcon from "./AppIcon.vue";
 import { fmtPct } from "../utils/format";
 
 const props = defineProps({
@@ -30,14 +31,21 @@ const rows = computed(() => props.stocks);
         <tr v-for="s in rows" :key="s.id" class="clickable" :class="{ selected: s.symbol === selectedSymbol }"
           @click="emit('select', s)">
           <td><span class="symbol-badge">{{ s.symbol }}</span></td>
-          <td class="stock-name">{{ s.name }}<span v-if="favoriteIds.has(s.id)" class="fav-star" title="已自选">★</span></td>
+          <td class="stock-name">
+            {{ s.name }}
+            <span class="tag src-tag" :class="s.quote_source === 'real' ? 'tag-ok' : 'tag-muted'">
+              {{ s.quote_source === "real" ? "真实" : "模拟" }}
+            </span>
+            <AppIcon v-if="favoriteIds.has(s.id)" name="star-filled" :size="12" class="fav-star" title="已自选" />
+          </td>
           <td><AnimatedNumber :value="s.price" :class="s.change >= 0 ? 'up' : 'down'" /></td>
           <td><span class="pct-pill" :class="s.change >= 0 ? 'up' : 'down'">{{ fmtPct(s.change_pct) }}</span></td>
           <td>
             <div class="actions">
               <button v-if="showFavorite" class="btn btn-sm" :title="favoriteIds.has(s.id) ? '移除自选' : '加入自选'"
                 @click.stop="emit('toggle-fav', s)">
-                {{ favoriteIds.has(s.id) ? "★ 自选" : "☆ 加自选" }}
+                <AppIcon :name="favoriteIds.has(s.id) ? 'star-filled' : 'star'" :size="13" />
+                {{ favoriteIds.has(s.id) ? "自选" : "加自选" }}
               </button>
               <button class="btn btn-sm" :class="s.change >= 0 ? 'btn-up' : 'btn-down'" @click.stop="emit('order', s)">
                 下单
@@ -52,6 +60,8 @@ const rows = computed(() => props.stocks);
 
 <style scoped>
 .stock-name { font-weight: 600; }
-.fav-star { color: var(--gold); margin-left: 5px; font-size: 12px; }
+.fav-star { color: var(--gold); margin-left: 5px; }
+.src-tag { font-size: 10px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
 .actions { display: flex; gap: 7px; }
+.actions .btn { display: inline-flex; align-items: center; gap: 4px; }
 </style>

@@ -1,6 +1,9 @@
 <script setup>
+import AppIcon from "./AppIcon.vue";
+
 defineProps({
   glyph: { type: String, default: "◌" },
+  icon: { type: String, default: "" },  // 优先内联 SVG 图标名
   title: { type: String, default: "暂无数据" },
   sub: { type: String, default: "" },
 });
@@ -8,7 +11,10 @@ defineProps({
 
 <template>
   <div class="empty">
-    <div class="glyph">{{ glyph }}</div>
+    <div class="glyph">
+      <AppIcon v-if="icon" :name="icon" :size="34" />
+      <template v-else>{{ glyph }}</template>
+    </div>
     <div class="title">{{ title }}</div>
     <div v-if="sub" class="sub">{{ sub }}</div>
     <div class="action" style="margin-top: 12px"><slot /></div>
@@ -16,5 +22,6 @@ defineProps({
 </template>
 
 <style scoped>
-.sub { font-size: 12.5px; }
+.sub { font-size: 12px; }
+.glyph { color: var(--text-3); }
 </style>

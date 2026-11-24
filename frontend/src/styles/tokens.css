@@ -1,5 +1,5 @@
 /* ============================================================
-   FinQuant 设计令牌 — 默认深色 "Aurora Terminal" / 可选浅色
+   RyQuant 设计令牌 — 默认深色 "Aurora Terminal" / 可选浅色
    切换方式:<html data-theme="light">
    ============================================================ */
 :root {
@@ -28,6 +28,19 @@
   /* 描边 */
   --border: rgba(124, 144, 196, 0.16);
   --border-strong: rgba(124, 144, 196, 0.34);
+
+  /* 交互表面 */
+  --hover-bg: rgba(124, 144, 196, 0.1);
+  --up-hover: #ff6272;
+  --down-hover: #17e0ac;
+
+  /* 间距刻度 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 28px;
 
   /* 文本 */
   --text-1: #e9eef8;
@@ -95,6 +108,10 @@
 
   --border: rgba(30, 45, 90, 0.13);
   --border-strong: rgba(30, 45, 90, 0.26);
+
+  --hover-bg: rgba(30, 45, 90, 0.06);
+  --up-hover: #c00f28;
+  --down-hover: #00805c;
 
   --text-1: #18233b;
   --text-2: #45526b;

@@ -5,6 +5,7 @@ import { useAuthStore } from "../stores/auth";
 import { aiQuery } from "../api";
 import { fmtDateTime } from "../utils/format";
 import VipBadge from "../components/VipBadge.vue";
+import AppIcon from "../components/AppIcon.vue";
 import { toast } from "../composables/useToast";
 
 const auth = useAuthStore();
@@ -56,7 +57,7 @@ onMounted(() => {
   if (auth.isVip) {
     messages.value.push({
       sender: "bot",
-      content: "你好!我是 FinQuant 投研助手(模拟环境)。可以直接问我持仓分析、行情观点,或让我解释某个量化策略。提示:回答不构成投资建议。",
+      content: "你好!我是 RyQuant 投研助手(模拟环境)。可以直接问我持仓分析、行情观点(含市场脉冲推断),或让我解释某个量化策略。提示:回答不构成投资建议。",
       time: new Date().toISOString(),
     });
   }
@@ -68,7 +69,7 @@ onMounted(() => {
     <!-- 未开通 VIP -->
     <div v-if="!auth.isVip" class="panel-gradient vip-gate">
       <div class="panel vip-inner" style="border: none">
-        <div class="lock">🤖</div>
+        <div class="lock"><AppIcon name="robot" :size="40" /></div>
         <h1 class="vip-title">AI 投研助手</h1>
         <p class="vip-sub">
           接入大模型的对话式投研助理:解读你的持仓与盈亏、分析模拟行情、讲解量化策略。
@@ -99,7 +100,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="error" class="field-error" role="alert">⚠ {{ error }}</div>
+        <div v-if="error" class="field-error" role="alert"><AppIcon name="warn" :size="13" /> {{ error }}</div>
 
         <div class="suggestion-row">
           <button v-for="s in suggestions" :key="s" class="btn btn-sm" :disabled="sending" @click="send(s)">
@@ -125,7 +126,7 @@ onMounted(() => {
 <style scoped>
 .vip-gate { max-width: 640px; margin: 6vh auto 0; }
 .vip-inner { text-align: center; padding: 44px 36px; }
-.lock { font-size: 44px; margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.4)); }
+.lock { color: var(--brand-a); margin-bottom: 10px; filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.4)); }
 .vip-title {
   font-size: 30px;
   background: var(--brand-grad);
@@ -146,11 +147,11 @@ onMounted(() => {
   max-width: 76%;
   padding: 11px 15px;
   border-radius: 16px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.7;
 }
 .msg-content { white-space: pre-wrap; word-break: break-word; }
-.msg-time { font-size: 10.5px; margin-top: 6px; opacity: 0.55; }
+.msg-time { font-size: 11px; margin-top: 6px; opacity: 0.55; }
 .bubble.bot {
   background: var(--panel);
   border: 1px solid var(--border);
