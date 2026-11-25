@@ -22,9 +22,9 @@ function buildOption(cmp) {
   const c = chartColors();
   const results = cmp.results || [];
   const dates = (results[0]?.curve || []).map((p) => p.date);
-  const palette = [c.brandA, c.brandB, c.gold, c.up, c.down];
+  const palette = c.series;
   return {
-    animationDuration: 700,
+    animationDuration: 0,
     backgroundColor: "transparent",
     tooltip: {
       trigger: "axis",
@@ -36,33 +36,33 @@ function buildOption(cmp) {
     legend: {
       data: results.map((r) => r.name),
       top: 0,
-      textStyle: { color: c.text2, fontSize: 11 },
+      textStyle: { color: c.text2, fontSize: 12 },
       itemWidth: 14, itemHeight: 2,
     },
     grid: { left: 56, right: 24, top: 30, bottom: 46 },
     xAxis: {
       type: "category", data: dates,
       axisLine: { lineStyle: { color: c.axis } },
-      axisLabel: { color: c.text, fontSize: 10 },
+      axisLabel: { color: c.text, fontSize: 12 },
       splitLine: { show: false },
     },
     yAxis: {
       scale: true,
-      axisLabel: { color: c.text, fontSize: 10, formatter: (v) => `${v.toFixed(0)}%` },
+      axisLabel: { color: c.text, fontSize: 12, formatter: (v) => `${v.toFixed(0)}%` },
       splitLine: { lineStyle: { color: c.split } },
     },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       {
         type: "slider", bottom: 2, height: 16, borderColor: c.axis,
-        backgroundColor: "rgba(124,144,196,0.08)", fillerColor: "rgba(34,211,238,0.15)",
-        handleStyle: { color: c.brandA }, textStyle: { color: c.text, fontSize: 10 },
+        backgroundColor: c.split, fillerColor: c.brandA + "26",
+        handleStyle: { color: c.brandA }, textStyle: { color: c.text, fontSize: 12 },
       },
     ],
     series: results.map((r, i) => ({
       name: r.name, type: "line", symbol: "none",
       data: r.curve.map((p) => p.pct),
-      lineStyle: { width: i === 0 ? 2.4 : 1.6, color: palette[i % palette.length] },
+      lineStyle: { width: i === 0 ? 2 : 1.5, color: palette[i % palette.length] },
       emphasis: { focus: "series" },
     })),
   };

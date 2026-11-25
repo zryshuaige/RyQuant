@@ -1,51 +1,49 @@
 <script setup>
+/** 指数卡片:点击查看 K 线。 */
 import { computed } from "vue";
-import AnimatedNumber from "./AnimatedNumber.vue";
-import { fmtPct, trendClass } from "../utils/format";
+import { fmtMoney, fmtPct, trendClass } from "../utils/format";
 
 const props = defineProps({ index: { type: Object, required: true } });
-
+const emit = defineEmits(["select"]);
 const cls = computed(() => trendClass(props.index.change));
-const arrow = computed(() => (props.index.change > 0 ? "▲" : props.index.change < 0 ? "▼" : "—"));
 </script>
 
 <template>
-  <div class="panel hoverable index-card" :class="cls">
-    <div class="head">
-      <span class="name">
-        {{ index.name }}
-        <span class="tag src-tag" :class="index.quote_source === 'real' ? 'tag-ok' : 'tag-muted'">
-          {{ index.quote_source === "real" ? "真实" : "模拟" }}
-        </span>
-      </span>
-      <span class="pct-pill" :class="cls">{{ arrow }} {{ fmtPct(index.change_pct) }}</span>
-    </div>
-    <AnimatedNumber class="value" :value="index.current" :duration="700" />
-    <div class="sub num" :class="cls">
-      {{ index.change > 0 ? "+" : "" }}{{ index.change.toFixed(2) }} 较昨收
-    </div>
-  </div>
+  <button class="panel index-card" :class="['dir-' + cls, { clickable: index.symbol }]" :disabled="!index.symbol"
+    :aria-label="`${index.name} ${fmtMoney(index.current)} ${fmtPct(index.change_pct)}`"
+    @click="emit('select', index)">
+    <span class="head">
+      <span class="name">{{ index.name }}</span>
+      <span class="pct-pill" :class="cls">{{ fmtPct(index.change_pct) }}</span>
+    </span>
+    <span class="value num">{{ fmtMoney(index.current) }}</span>
+  </button>
 </template>
 
 <style scoped>
-.index-card { padding: var(--space-4) 18px; position: relative; overflow: hidden; }
-/* token 化微光:整面淡染替代重blur光斑,浅色主题同样干净 */
+.index-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 16px 18px 16px 20px;
+  text-align: left;
+  color: var(--text-1);
+  cursor: default;
+  overflow: hidden;
+}
 .index-card::before {
   content: "";
   position: absolute;
-  inset: 0;
-  background: var(--down-bg);
-  opacity: 0.55;
-  pointer-events: none;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--flat);
 }
-.index-card.up::before { background: var(--up-bg); }
-.head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2); position: relative; }
-.name { color: var(--text-2); font-weight: 600; font-size: 13px; }
-.src-tag { font-size: 10px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
-.value {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.sub { font-size: 12px; margin-top: 3px; color: var(--text-3); position: relative; }
+.index-card.dir-up::before { background: var(--up); }
+.index-card.dir-down::before { background: var(--down); }
+.index-card.clickable { cursor: pointer; }
+.index-card.clickable:hover { border-color: var(--border-strong); background: var(--panel-hover); box-shadow: var(--shadow-2); }
+.head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.name { color: var(--text-2); font-weight: 600; font-size: var(--fs-sm); }
+.value { display: block; font-family: var(--font-display); font-size: var(--fs-3xl); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+.index-card:disabled { cursor: default; }
 </style>

@@ -1,4 +1,4 @@
-"""全链路冒烟:登录→行情/来源→市场脉冲+策略推荐→自选(加入日期)→回测→策略对比→AI"""
+"""全链路冒烟:登录→行情→标的检索/注册→大盘状态+策略建议→自选跟踪→回测→策略对比→AI"""
 import time
 
 import requests
@@ -26,7 +26,7 @@ s.headers["Authorization"] = f"Token {token}"
 # 2. 行情与来源标注
 r = s.get(f"{BASE}/stocks/")
 stocks = {x["symbol"]: x for x in r.json()}
-check("股票列表+来源字段", r.status_code == 200 and len(stocks) >= 8
+check("股票列表+来源字段", r.status_code == 200 and len(stocks) >= 20
       and all("quote_source" in x for x in stocks.values()))
 r = s.get(f"{BASE}/indices/")
 idx = r.json()["indices"]
@@ -36,27 +36,42 @@ r = s.get(f"{BASE}/kline/", params={"symbol": "600519", "limit": 30})
 kd = r.json()
 check("K线+逐根来源", r.status_code == 200 and len(kd["klines"]) == 30 and len(kd["sources"]) == 30)
 r = s.get(f"{BASE}/sectors/")
-check("板块(真实成分)", r.status_code == 200 and len(r.json()["sectors"]) == 4)
+check("板块(真实成分)", r.status_code == 200 and len(r.json()["sectors"]) == 6)
 
 # 3. 市场脉冲 + 当前状态策略推荐
 r = s.get(f"{BASE}/market/pulse/")
 p = r.json()
-check("市场脉冲 regime", r.status_code == 200 and p["regime"] in ("bull", "bear", "range", "high_vol"),
+check("大盘状态 regime", r.status_code == 200 and p["regime"] in ("bull", "bear", "range", "high_vol"),
       f"{p['label']} score={p['score']}")
-check("脉冲证据链", len(p["evidence"]) >= 3)
-check("当前状态适用策略推荐", len(p.get("advice", [])) >= 1 and "reason" in p["advice"][0],
+check("判断依据", len(p["evidence"]) >= 3)
+check("当前行情策略建议", len(p.get("advice", [])) >= 1 and "reason" in p["advice"][0],
       f"top={p['advice'][0]['name'] if p.get('advice') else '--'}")
 
-# 4. 自选:加入日期可查
-r = s.post(f"{BASE}/favorites/", json={"stock_id": stocks["000858"]["id"]})
+# 4. 标的注册表:名称/代码检索 + 已有标的按需解析
+r = s.get(f"{BASE}/stocks/search/", params={"q": "招商银行"})
+hits = r.json().get("results", [])
+check("标的检索(本地名称)", r.status_code == 200 and any(x["code"] == "600036" for x in hits),
+      f"{[x['name'] for x in hits[:3]]}")
+r = s.post(f"{BASE}/stocks/resolve/", json={"symbol": "600036"})
+check("标的按需解析(幂等)", r.status_code == 200 and r.json().get("name") == "招商银行"
+      and r.json().get("history_source") in ("existing", "real", "sim"))
+
+# 5. 自选:加入日期 + 加入以来收益/上证对比
+r = s.post(f"{BASE}/favorites/", json={"stock_id": stocks["600036"]["id"]})
 check("加自选", r.status_code == 201 and r.json().get("created_at"))
 fav_id = r.json()["id"]
 r = s.get(f"{BASE}/favorites/")
 check("自选列表含加入日期", r.status_code == 200 and all(f.get("created_at") for f in r.json()))
+r = s.get(f"{BASE}/favorites/summary/")
+summary = r.json()
+item = next((x for x in summary.get("items", []) if x["stock"]["symbol"] == "600036"), None)
+check("自选加入以来表现", r.status_code == 200 and item is not None
+      and {"return_pct", "benchmark_return_pct", "excess_pct"} <= set(item),
+      f"收益 {item['return_pct'] if item else '--'}% 超额 {item['excess_pct'] if item else '--'}%")
 r = s.delete(f"{BASE}/favorites/{fav_id}/")
 check("移除自选", r.status_code == 204)
 
-# 5. 单策略回测 + 持久化
+# 6. 单策略回测 + 持久化
 r = s.post(f"{BASE}/backtest/", json={"strategy": "ma_cross", "symbol": "600519",
                                       "params": {"fast": 5, "slow": 20}, "days": 200})
 run = r.json().get("run", {})
@@ -67,9 +82,11 @@ check("回测结果持久化", run.get("id") and len(run.get("equity_curve", [])
 r = s.get(f"{BASE}/backtest/history/")
 check("回测历史", r.status_code == 200 and len(r.json()["runs"]) >= 1)
 r = s.get(f"{BASE}/strategies/")
-check("策略列表 schema", len(r.json()["strategies"]) == 4)
+_ids = [x["id"] for x in r.json()["strategies"]]
+check("策略列表 schema", len(_ids) >= 4
+      and {"ma_cross", "macd", "rsi_reversion", "boll_breakout"} <= set(_ids))
 
-# 6. 跨策略有效性对比(核心功能)
+# 7. 跨策略有效性对比(核心功能)
 r = s.post(f"{BASE}/backtest/compare/", json={"symbol": "sh000001", "days": 200})
 c = r.json()
 results = c.get("results", [])
@@ -78,21 +95,21 @@ check("策略对比排名", r.status_code == 200 and len(results) == 4
       f"top={results[0]['name'] if results else '--'} OOS Sharpe={results[0]['oos']['sharpe'] if results else '--'}")
 check("样本外折+regime 分解", all(len(x["oos"]["folds"]) == 3 and "regime" in x for x in results))
 
-# 7. AI 助手(登录即可,离线降级)
+# 8. AI 助手(登录即可,离线降级)
 r = s.post(f"{BASE}/ai/query/", json={"text": "现在大盘适合什么策略?"})
 check("AI 问答(离线降级)", r.status_code == 200 and len(r.json()["answer"]) > 10,
       r.json()["answer"][:40].replace("\n", " "))
 r = s.post(f"{BASE}/ai/query/", json={"text": "继续", "conversation_id": r.json()["conversation"]["id"]})
 check("AI 会话延续", r.status_code == 200 and len(r.json()["conversation"]["messages"]) == 4)
 
-# 8. 注册与错误密码(用户名带时间戳,保证冒烟可重复执行)
+# 9. 注册与错误密码(用户名带时间戳,保证冒烟可重复执行)
 smoke_name = f"smoke_{int(time.time())}"
 r = requests.post(f"{BASE}/register/", json={"username": smoke_name, "password": "abc123", "email": ""})
 check("注册新用户", r.status_code == 200 and r.json()["user"]["username"] == smoke_name)
 r = requests.post(f"{BASE}/login/", json={"username": smoke_name, "password": "bad"})
 check("错误密码 400", r.status_code == 400 and r.json()["detail"] == "Invalid credentials")
 
-# 9. 已下单接口应不存在(产品已移除交易功能)
+# 10. 下单接口应不存在(产品已移除交易功能)
 r = s.post(f"{BASE}/orders/", json={})
 check("下单接口已移除", r.status_code == 404)
 

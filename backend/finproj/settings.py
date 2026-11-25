@@ -103,7 +103,10 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "auth": "30/min",
         "backtest": "10/min",
+        "preview": "60/min",
         "ai": "10/min",
+        "search": "30/min",
+        "resolve": "10/min",
     },
 }
 

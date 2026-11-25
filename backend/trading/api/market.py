@@ -3,13 +3,16 @@ from decimal import Decimal
 
 from django.utils import timezone
 from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import Candle, Stock
 from ..services.errors import BusinessError
 from ..services.market_data import SECTOR_MEMBERS
+from ..services.stock_registry import resolve_stock, search_symbols
 from ..serializers import StockSerializer
+from .throttling import ResolveThrottle, SearchThrottle
 
 TWO = Decimal("0.01")
 
@@ -27,6 +30,32 @@ class StockListView(ListAPIView):
     def get_queryset(self):
         # 只列出可交易股票;指数(kind=index)通过 /indices/ 提供
         return Stock.objects.filter(kind=Stock.Kind.STOCK, is_active=True)
+
+
+class StockSearchView(APIView):
+    """GET /api/stocks/search/?q= — 本地优先 + 腾讯名称联想,不落库。"""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [SearchThrottle]
+
+    def get(self, request):
+        q = str(request.query_params.get("q", "")).strip()[:32]
+        return Response(search_symbols(q))
+
+
+class StockResolveView(APIView):
+    """POST /api/stocks/resolve/ — 按代码/名称识别标的,落库并补齐历史行情。"""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ResolveThrottle]
+
+    def post(self, request):
+        query = request.data.get("symbol") or request.data.get("query")
+        stock, created, history_source = resolve_stock(query)
+        data = StockSerializer(stock).data
+        data["created"] = created
+        data["history_source"] = history_source
+        return Response(data, status=201 if created else 200)
 
 
 class IndicesView(APIView):

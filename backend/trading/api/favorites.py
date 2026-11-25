@@ -1,10 +1,13 @@
-"""自选股 CRUD:列表 / 加入 / 删除(仅本人)。"""
+"""自选股 CRUD + 加入以来表现汇总(仅本人)。"""
 from django.shortcuts import get_object_or_404
-from rest_framework.generics import ListCreateAPIView, DestroyAPIView
+from rest_framework.generics import DestroyAPIView, ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from ..models import Favorite
-from ..serializers import FavoriteSerializer
+from ..serializers import FavoriteSerializer, StockSerializer
+from ..services.watchlist import favorites_summary
 
 
 class FavoriteListCreateView(ListCreateAPIView):
@@ -23,3 +26,18 @@ class FavoriteDeleteView(DestroyAPIView):
 
     def get_object(self):
         return get_object_or_404(Favorite, pk=self.kwargs["pk"], user=self.request.user)
+
+
+class FavoritesSummaryView(APIView):
+    """GET /api/favorites/summary/ — 加入以来收益 / 同期上证 / 超额收益。"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data = favorites_summary(request.user)
+        data["items"] = [
+            {**{k: v for k, v in item.items() if k != "stock"},
+             "stock": StockSerializer(item["stock"]).data}
+            for item in data["items"]
+        ]
+        return Response(data)

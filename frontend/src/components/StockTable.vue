@@ -1,64 +1,79 @@
 <script setup>
+/** 标的表:分页 + 排序 + 数字右对齐;点击行看 K 线,右侧明确「加入自选 / 移除」。 */
 import { computed } from "vue";
-import AnimatedNumber from "./AnimatedNumber.vue";
+import DataTable from "./DataTable.vue";
+import DataPagination from "./DataPagination.vue";
 import AppIcon from "./AppIcon.vue";
-import { fmtPct, fmtDate } from "../utils/format";
+import { usePagedSort } from "../composables/usePagedSort";
+import { fmtMoney, fmtPct, trendClass } from "../utils/format";
 
 const props = defineProps({
   stocks: { type: Array, required: true },
   favoriteIds: { type: Set, default: () => new Set() },
   selectedSymbol: { type: String, default: "" },
+  pendingIds: { type: Array, default: () => [] },
   showFavorite: { type: Boolean, default: true },
-  joinedDates: { type: Object, default: null }, // symbol → 加入自选 ISO 日期(自选页展示)
 });
 const emit = defineEmits(["toggle-fav", "select"]);
 
 const rows = computed(() => props.stocks);
+const { page, pageSize, sortKey, sortDir, pageRows, total, totalPages, toggleSort, setPage, setPageSize } =
+  usePagedSort(rows, { pageSize: 10 });
+
+const columns = computed(() => [
+  { key: "name", label: "名称" },
+  { key: "symbol", label: "代码", mono: true, hideMobile: true },
+  { key: "price", label: "现价", align: "right", sortable: true },
+  { key: "change_pct", label: "涨跌幅", align: "right", sortable: true },
+  ...(props.showFavorite ? [{ key: "fav", label: "自选", align: "right" }] : []),
+]);
 </script>
 
 <template>
-  <div class="table-wrap">
-    <table class="data">
-      <thead>
-        <tr>
-          <th>代码</th>
-          <th>名称</th>
-          <th>现价</th>
-          <th>涨跌幅</th>
-          <th v-if="joinedDates">加入自选</th>
-          <th v-if="showFavorite" style="width: 110px">操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="s in rows" :key="s.id" class="clickable" :class="{ selected: s.symbol === selectedSymbol }"
-          @click="emit('select', s)">
-          <td><span class="symbol-badge">{{ s.symbol }}</span></td>
-          <td class="stock-name">
-            {{ s.name }}
-            <span class="tag src-tag" :class="s.quote_source === 'real' ? 'tag-ok' : 'tag-muted'">
-              {{ s.quote_source === "real" ? "真实" : "模拟" }}
-            </span>
-            <AppIcon v-if="favoriteIds.has(s.id)" name="star-filled" :size="12" class="fav-star" title="已自选" />
-          </td>
-          <td><AnimatedNumber :value="s.price" :class="s.change >= 0 ? 'up' : 'down'" /></td>
-          <td><span class="pct-pill" :class="s.change >= 0 ? 'up' : 'down'">{{ fmtPct(s.change_pct) }}</span></td>
-          <td v-if="joinedDates" class="num joined-date">{{ fmtDate(joinedDates[s.symbol]) }}</td>
-          <td v-if="showFavorite">
-            <button class="btn btn-sm" :title="favoriteIds.has(s.id) ? '移除自选' : '加入自选'"
-              @click.stop="emit('toggle-fav', s)">
-              <AppIcon :name="favoriteIds.has(s.id) ? 'star-filled' : 'star'" :size="13" />
-              {{ favoriteIds.has(s.id) ? "自选" : "加自选" }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <DataTable :columns="columns" :rows="pageRows" :sort-key="sortKey" :sort-dir="sortDir"
+    row-key="symbol" :selected-key="selectedSymbol" @sort="toggleSort" @select="emit('select', $event)">
+    <template #cell-name="{ row }">
+      <span class="stock-name">{{ row.name }}</span>
+      <span v-if="row.quote_source === 'sim'" class="tag tag-muted sim-tag">模拟</span>
+      <span class="mobile-code num">{{ row.symbol }}</span>
+    </template>
+    <template #cell-symbol="{ row }"><span class="symbol-badge">{{ row.symbol }}</span></template>
+    <template #cell-price="{ row }"><span :class="trendClass(row.change)">{{ fmtMoney(row.price) }}</span></template>
+    <template #cell-change_pct="{ row }">
+      <span class="pct-pill" :class="trendClass(row.change_pct)">{{ fmtPct(row.change_pct) }}</span>
+    </template>
+    <template #cell-fav="{ row }">
+      <button class="btn btn-sm fav-btn" :class="{ 'fav-on': favoriteIds.has(row.id) }"
+        :disabled="pendingIds.includes(row.id)"
+        :aria-pressed="favoriteIds.has(row.id)"
+        :aria-label="favoriteIds.has(row.id) ? `移除自选 ${row.name}` : `加入自选 ${row.name}`"
+        @click.stop="emit('toggle-fav', row)">
+        <span v-if="pendingIds.includes(row.id)" class="spinner"></span>
+        <AppIcon v-else :name="favoriteIds.has(row.id) ? 'star-filled' : 'star'" :size="13" />
+        <span class="fav-label">{{ favoriteIds.has(row.id) ? "移除" : "加入自选" }}</span>
+      </button>
+    </template>
+    <template #empty>
+      <div class="empty">
+        <div class="title">没有匹配的股票</div>
+        <div class="sub">换个代码或名称试试,也可以直接在上方搜索框输入。</div>
+      </div>
+    </template>
+  </DataTable>
+  <DataPagination :page="page" :page-size="pageSize" :total="total" :total-pages="totalPages"
+    @update:page="setPage" @update:page-size="setPageSize" />
 </template>
 
 <style scoped>
 .stock-name { font-weight: 600; }
-.fav-star { color: var(--gold); margin-left: 5px; }
-.src-tag { font-size: 10px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
-.joined-date { color: var(--gold); font-weight: 600; }
+.sim-tag { margin-left: 6px; }
+.mobile-code { display: none; }
+.fav-btn { min-width: 76px; }
+.fav-on { color: var(--gold); border-color: var(--gold-border); background: var(--gold-bg); }
+.fav-on:hover { color: var(--gold); border-color: var(--gold); background: var(--gold-bg); }
+@media (max-width: 600px) {
+  .mobile-code { display: inline; margin-left: 6px; font-size: var(--fs-xs); color: var(--text-3); }
+  .fav-btn { min-width: 34px; padding: 4px 8px; }
+  .fav-label { display: none; }
+}
 </style>

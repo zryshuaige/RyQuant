@@ -1,70 +1,91 @@
 <script setup>
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { theme, toggleTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import { toast } from "../composables/useToast";
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
-const menuOpen = ref(false);
+const navEl = ref(null);
 
 const navItems = [
-  { to: "/", label: "行情总览", exact: true },
-  { to: "/favorites", label: "自选股" },
-  { to: "/backtest", label: "量化回测" },
-  { to: "/ai", label: "AI 助手" },
+  { to: "/", label: "行情总览", icon: "chart", exact: true },
+  { to: "/favorites", label: "自选跟踪", icon: "star" },
+  { to: "/backtest", label: "量化回测", icon: "scale" },
+  { to: "/ai", label: "研究助手", icon: "robot" },
 ];
+
+/* 胶囊导航滑动指示器(桌面) */
+const linkEls = ref({});
+const indicator = ref({ width: 0, transform: "translateX(0)", ready: false });
+function setLinkEl(to, el) {
+  const node = el && el.$el ? el.$el : el;
+  if (node) linkEls.value[to] = node;
+  else delete linkEls.value[to];
+}
+function syncIndicator() {
+  const item = navItems.find((n) => (n.exact ? route.path === n.to : route.path.startsWith(n.to)));
+  const el = item && linkEls.value[item.to];
+  if (!el || !navEl.value || window.innerWidth <= 860) {
+    indicator.value.ready = false;
+    return;
+  }
+  indicator.value = { width: el.offsetWidth, transform: `translateX(${el.offsetLeft}px)`, ready: true };
+}
 
 function logout() {
   auth.logout();
   toast.info("已退出登录");
   router.push({ name: "home" });
 }
+watch(() => route.fullPath, () => nextTick(syncIndicator));
+onMounted(() => {
+  window.addEventListener("resize", syncIndicator);
+  nextTick(syncIndicator);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncIndicator);
+});
+onUnmounted(() => {
+  window.removeEventListener("resize", syncIndicator);
+});
 </script>
 
 <template>
   <header class="header">
     <div class="header-inner">
       <router-link to="/" class="brand" aria-label="RyQuant 首页">
-        <svg class="brand-mark" viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
-          <defs>
-            <linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#22d3ee" />
-              <stop offset="1" stop-color="#8b5cf6" />
-            </linearGradient>
-          </defs>
-          <path d="M5 23 L11 14 L17 18 L27 6" stroke="url(#brand-g)" stroke-width="3.4" fill="none"
+        <svg class="brand-mark" viewBox="0 0 32 32" width="22" height="22" aria-hidden="true">
+          <path d="M5 23 L11 14 L17 18 L27 6" stroke="currentColor" stroke-width="3.2" fill="none"
             stroke-linecap="round" stroke-linejoin="round" />
-          <circle cx="27" cy="6" r="3.4" fill="url(#brand-g)" />
+          <circle cx="27" cy="6" r="3" fill="currentColor" />
         </svg>
         <span class="brand-name">Ry<em>Quant</em></span>
       </router-link>
 
-      <button class="btn btn-sm btn-ghost nav-burger" :aria-expanded="menuOpen" aria-label="打开导航"
-        @click="menuOpen = !menuOpen">
-        <AppIcon name="menu" :size="18" />
-      </button>
-
-      <nav class="nav" :class="{ open: menuOpen }" aria-label="主导航">
+      <nav id="main-nav" ref="navEl" class="nav" aria-label="主导航">
+        <span class="nav-indicator" :class="{ ready: indicator.ready }" aria-hidden="true"
+          :style="{ width: indicator.width + 'px', transform: indicator.transform }"></span>
         <router-link v-for="item in navItems" :key="item.to" :to="item.to"
-          class="nav-link" :class="{ exact: item.exact }" @click="menuOpen = false">
+          :ref="(el) => setLinkEl(item.to, el)" class="nav-link" :class="{ exact: item.exact }">
           {{ item.label }}
         </router-link>
       </nav>
 
       <div class="auth-area">
-        <button class="btn btn-sm btn-ghost theme-toggle" :title="theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'"
-          :aria-label="theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'" @click="toggleTheme">
-          <AppIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
+        <button class="theme-toggle" :title="theme === 'yonder' ? '切换到 Reverie(浅)' : '切换到 Yonder(深)'"
+          :aria-label="theme === 'yonder' ? '切换到 Reverie 浅色主题' : '切换到 Yonder 深色主题'" @click="toggleTheme">
+          <AppIcon :name="theme === 'yonder' ? 'moon' : 'sun'" :size="14" />
+          <span class="theme-name" :class="{ 'is-active': theme === 'reverie' }">Reverie</span>
+          <span class="theme-name" :class="{ 'is-active': theme === 'yonder' }">Yonder</span>
         </button>
         <template v-if="auth.isLoggedIn">
-          <span class="user-chip" :title="auth.user?.email">
+          <span class="user-chip">
             <span class="avatar">{{ auth.username.slice(0, 1).toUpperCase() }}</span>
-            {{ auth.username }}
+            <span class="user-name">{{ auth.username }}</span>
           </span>
-          <button class="btn btn-sm btn-ghost" @click="logout">退出</button>
+          <button class="btn btn-sm btn-ghost logout-btn" @click="logout">退出</button>
         </template>
         <template v-else>
           <router-link class="btn btn-sm btn-ghost" :to="{ name: 'login' }">登录</router-link>
@@ -73,6 +94,15 @@ function logout() {
       </div>
     </div>
   </header>
+
+  <!-- 移动端常驻底部标签栏:四个页面始终可见。
+       必须置于 <header> 之外:header 的 backdrop-filter 会成为 fixed 后代的包含块 -->
+  <nav class="tabbar" aria-label="主导航">
+    <router-link v-for="item in navItems" :key="item.to" :to="item.to" class="tabbar-item">
+      <AppIcon :name="item.icon" :size="18" />
+      <span>{{ item.label }}</span>
+    </router-link>
+  </nav>
 </template>
 
 <style scoped>
@@ -80,101 +110,172 @@ function logout() {
   position: sticky;
   top: 0;
   z-index: 50;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   background: var(--header-bg);
+  backdrop-filter: blur(var(--blur-chrome));
+  -webkit-backdrop-filter: blur(var(--blur-chrome));
   border-bottom: 1px solid var(--border);
 }
 .header-inner {
   max-width: 1240px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
 }
-.brand { display: flex; align-items: center; gap: 9px; }
+.brand { display: flex; align-items: center; gap: 8px; color: var(--text-1); }
+.brand:hover { color: var(--text-1); }
+.brand-mark { color: var(--accent); flex: none; }
 .brand-name {
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  background: linear-gradient(120deg, #e9eef8 30%, #22d3ee 55%, #8b5cf6 80%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
-.brand-name em { font-style: normal; }
-.nav { display: flex; gap: 4px; flex: 1; flex-wrap: nowrap; overflow-x: auto; }
+.brand-name em { color: var(--accent-text); font-style: normal; font-weight: 400; }
+
+/* 胶囊导航 + 滑动指示器 */
+.nav {
+  position: relative;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel-chrome);
+  backdrop-filter: blur(var(--blur-chrome));
+  -webkit-backdrop-filter: blur(var(--blur-chrome));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 28px var(--shadow-color);
+  max-width: 460px;
+  margin: 0 auto;
+}
+.nav-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  z-index: 1;
+  border-radius: var(--radius-pill);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 4px 12px var(--shadow-color);
+  opacity: 0;
+  transition: transform 0.26s var(--ease-out), width 0.26s var(--ease-out), opacity 0.2s;
+}
+.nav-indicator.ready { opacity: 1; }
 .nav-link {
   position: relative;
-  padding: 7px 13px;
-  border-radius: var(--radius-sm);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
+  letter-spacing: -0.01em;
   white-space: nowrap;
-  transition: color 0.2s, background 0.2s;
+  transition: color 0.18s;
 }
-.nav-link:hover { color: var(--text-1); background: var(--hover-bg); }
-.nav-link.router-link-active:not(.exact) { color: var(--text-1); }
-.nav-link.router-link-exact-active,
-.nav-link.exact.router-link-active { color: var(--text-1); }
-.nav-link.router-link-active::after {
+.nav-link:hover { color: var(--text-1); }
+.nav-link.router-link-active { color: var(--text-1); }
+
+.auth-area { display: flex; align-items: center; gap: 8px; }
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel-chrome);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.theme-toggle:hover { background: var(--hover-bg); color: var(--text-1); }
+.theme-name { position: relative; padding: 4px 0; opacity: 0.55; transition: opacity 0.22s, color 0.22s; }
+.theme-name::after {
   content: "";
   position: absolute;
-  left: 12px; right: 12px; bottom: 1px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--brand-grad);
-  box-shadow: var(--glow-brand);
+  left: 25%; right: 25%; bottom: 0;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform 0.3s var(--ease-out);
 }
-.vip-dot { color: var(--gold); font-size: 8px; vertical-align: 2px; margin-left: 2px; }
-.auth-area { display: flex; align-items: center; gap: 9px; }
+.theme-name.is-active { opacity: 1; color: var(--text-1); }
+.theme-name.is-active::after { transform: scaleX(1); }
 .user-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-2);
   max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+.user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .avatar {
   width: 26px; height: 26px;
   border-radius: 50%;
-  background: var(--brand-grad);
-  color: #07101c;
-  font-weight: 800;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
 }
-.gold-text { color: var(--gold); font-weight: 800; }
-.nav-burger { display: none; margin-left: auto; }
+
+/* 移动端底部标签栏 */
+.tabbar { display: none; }
 @media (max-width: 860px) {
-  .header-inner { gap: 10px; padding: 9px 14px; }
-  .nav-burger { display: inline-flex; }
-  /* 抽屉式导航:覆盖在内容上方,不再挤压换行 */
-  .nav {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--space-2);
-    background: var(--panel-solid);
-    border-bottom: 1px solid var(--border);
-    box-shadow: var(--shadow-1);
+  .header-inner { gap: 8px; padding: 0 12px; height: 56px; }
+  .brand-name { font-size: 19px; }
+  .nav { display: none; }
+  .auth-area { gap: 4px; margin-left: auto; }
+  .user-name { display: none; }
+  .logout-btn { padding: 4px 8px; }
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 50;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--header-bg);
+    backdrop-filter: blur(var(--blur-chrome));
+    -webkit-backdrop-filter: blur(var(--blur-chrome));
+    border-top: 1px solid var(--border);
   }
-  .nav.open { display: flex; }
-  .nav-link { padding: 10px 14px; }
-  .nav-link.router-link-active::after { display: none; }
+  .tabbar-item {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 2px;
+    min-height: 46px;
+    border-radius: var(--radius-sm);
+    color: var(--text-3);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    transition: color 0.15s, background 0.15s;
+  }
+  .tabbar-item.router-link-active { color: var(--accent-text); background: var(--accent-bg); }
+}
+@media (max-width: 480px) {
+  .theme-name { display: none; }
+  .theme-toggle { padding: 0 10px; }
+}
+@media (max-width: 380px) {
+  .brand-name { display: none; }
 }
 </style>

@@ -67,8 +67,9 @@ class MarketApiTests(BaseAPITestCase):
         r1 = self.client.get("/api/sectors/").data
         r2 = self.client.get("/api/sectors/").data
         self.assertEqual(r1, r2)  # 同一数据下稳定
-        # 板块改为真实成分分组(金融/科技/消费/新能源),不再虚构
-        self.assertEqual({s["name"] for s in r1["sectors"]}, {"金融", "科技", "消费", "新能源"})
+        # 板块改为真实成分分组(6 板块),不再虚构
+        self.assertEqual({s["name"] for s in r1["sectors"]},
+                         {"金融", "科技", "消费", "新能源", "医药", "能源"})
         for s in r1["sectors"]:
             self.assertIn("change_pct", s)
             self.assertIn("values", s)

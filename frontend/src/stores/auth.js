@@ -1,6 +1,7 @@
 /** 认证状态:token/user 持久化于 localStorage */
 import { defineStore } from "pinia";
 import * as api from "../api";
+import { useMarketStore } from "./market";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -19,6 +20,7 @@ export const useAuthStore = defineStore("auth", {
       else localStorage.removeItem("fin_token");
       if (user) localStorage.setItem("fin_user", JSON.stringify(user));
       else localStorage.removeItem("fin_user");
+      useMarketStore().resetUserState();
     },
     async login(username, password) {
       const data = await api.authLogin({ username, password });

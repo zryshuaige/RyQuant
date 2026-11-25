@@ -1,7 +1,6 @@
 <script setup>
 import { onMounted, onUnmounted } from "vue";
 import AppHeader from "./components/AppHeader.vue";
-import TickerTape from "./components/TickerTape.vue";
 import ToastHost from "./components/ToastHost.vue";
 import { useMarketStore } from "./stores/market";
 
@@ -11,31 +10,36 @@ onUnmounted(() => market.stopPolling());
 </script>
 
 <template>
-  <div class="aurora-bg" aria-hidden="true"></div>
+  <a class="skip-link" href="#main">跳到主要内容</a>
   <AppHeader />
-  <TickerTape />
-  <main class="app-main">
+  <main id="main" class="app-main" tabindex="-1">
     <router-view v-slot="{ Component }">
       <transition name="page" mode="out-in">
-        <component :is="Component" :key="$route.fullPath" />
+        <component :is="Component" :key="$route.name" />
       </transition>
     </router-view>
   </main>
   <footer class="app-footer">
-    RyQuant 模拟交易终端 · 所有资金均为模拟数据,仅供学习 ·
-    <a href="/admin/" target="_blank" rel="noopener">后台管理</a>
+    RyQuant · 量化研究工具 · 行情数据来自腾讯财经 · 仅供研究学习,不构成投资建议
   </footer>
   <ToastHost />
 </template>
 
 <style scoped>
-.app-main { min-height: calc(100vh - 170px); }
+.app-main { min-height: calc(100vh - 140px); outline: none; }
+@media (max-width: 860px) {
+  .app-main { padding-bottom: 70px; }
+  .app-footer { padding-bottom: 84px; }
+}
 .app-footer {
   max-width: 1240px;
   margin: 0 auto;
-  padding: 18px 20px 26px;
+  padding: 16px 20px 24px;
+  border-top: 1px solid var(--border);
   color: var(--text-3);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
   text-align: center;
 }
 </style>

@@ -78,6 +78,7 @@ def fetch_realtime_quotes(symbols):
                 if abs(calc_pct - change_pct) > PCT_TOLERANCE:
                     continue
                 quotes[symbol] = {
+                    "name": fields[1].strip(),
                     "current": current,
                     "prev_close": prev_close,
                     "change": Decimal(fields[31]).quantize(TWO_PLACES),

@@ -48,6 +48,37 @@ defineProps({
     <template v-else-if="name === 'menu'">
       <path d="M4 7h16M4 12h16M4 17h16" />
     </template>
+    <template v-else-if="name === 'close'">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </template>
+    <template v-else-if="name === 'search'">
+      <circle cx="11" cy="11" r="7" />
+      <path d="M16.5 16.5L21 21" />
+    </template>
+    <template v-else-if="name === 'refresh'">
+      <path d="M20 11a8 8 0 1 0-2.3 6.3" />
+      <path d="M20 5v6h-6" />
+    </template>
+    <template v-else-if="name === 'chevron-down'">
+      <path d="M6 9l6 6 6-6" />
+    </template>
+    <template v-else-if="name === 'arrow-right'">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </template>
+    <template v-else-if="name === 'trash'">
+      <path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13" />
+    </template>
+    <template v-else-if="name === 'plus'">
+      <path d="M12 5v14M5 12h14" />
+    </template>
+    <template v-else-if="name === 'info'">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8v.5" />
+    </template>
+    <template v-else-if="name === 'star-off'">
+      <path d="M4 4l16 16" />
+      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3.6 3.6M6.6 6.6L3.2 9.5l6.1.9" />
+    </template>
     <template v-else>
       <circle cx="12" cy="12" r="8" />
     </template>

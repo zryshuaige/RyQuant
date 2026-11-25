@@ -3,11 +3,11 @@
 import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import * as echarts from "echarts/core";
 import { CandlestickChart, LineChart, ScatterChart } from "echarts/charts";
-import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent } from "echarts/components";
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent, MarkAreaComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import { chartColors, theme } from "../utils/chartTheme";
 
-echarts.use([CandlestickChart, LineChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent, CanvasRenderer]);
+echarts.use([CandlestickChart, LineChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkPointComponent, MarkAreaComponent, CanvasRenderer]);
 
 const props = defineProps({
   result: { type: Object, required: true }, // BacktestRun 详情:candles / markers / equity_curve / metrics
@@ -35,8 +35,8 @@ function buildOption(run) {
     .map((m) => ({
       value: [m.index, m.price],
       symbol: "triangle",
-      symbolSize: 13,
-      itemStyle: { color: c.up, shadowBlur: 10, shadowColor: c.up },
+      symbolSize: 11,
+      itemStyle: { color: c.up },
     }));
   const sellPoints = markers
     .filter((m) => m.side === "SELL")
@@ -45,11 +45,28 @@ function buildOption(run) {
       symbol: "triangle",
       symbolSize: 13,
       symbolRotate: 180,
-      itemStyle: { color: c.down, shadowBlur: 10, shadowColor: c.down },
+      itemStyle: { color: c.down },
     }));
 
+  // 最大回撤区间:峰→谷,在资金曲线上以底色标出
+  let peak = 0; let worst = 0; let ddFrom = -1; let ddTo = -1;
+  for (let i = 0; i < curve.length; i++) {
+    if (curve[i].equity > curve[peak].equity) peak = i;
+    const dd = curve[peak].equity ? curve[i].equity / curve[peak].equity - 1 : 0;
+    if (dd < worst) { worst = dd; ddFrom = peak; ddTo = i; }
+  }
+  const ddArea = ddFrom >= 0 && ddTo > ddFrom
+    ? {
+        silent: true,
+        itemStyle: { color: c.down + "1f" },
+        label: { show: true, position: "insideTop", color: c.text2, fontSize: 12, formatter: "最大回撤区间" },
+        data: [[{ xAxis: dates[ddFrom] }, { xAxis: dates[ddTo] }]],
+      }
+    : undefined;
+
   return {
-    animationDuration: 700,
+    animationDuration: 400,
+    animationDurationUpdate: 250,
     backgroundColor: "transparent",
     axisPointer: { link: [{ xAxisIndex: "all" }] },
     tooltip: {
@@ -83,7 +100,7 @@ function buildOption(run) {
     legend: {
       data: ["资金曲线", "买入持有基准"],
       top: 0,
-      textStyle: { color: c.text2, fontSize: 11 },
+      textStyle: { color: c.text2, fontSize: 12 },
       itemWidth: 14, itemHeight: 2,
     },
     grid: [
@@ -91,15 +108,15 @@ function buildOption(run) {
       { left: 62, right: 24, top: "62%", height: "24%" },
     ],
     xAxis: [
-      { type: "category", data: dates, axisLine: { lineStyle: { color: c.axis } }, axisLabel: { color: c.text, fontSize: 10 }, splitLine: { show: false } },
-      { type: "category", gridIndex: 1, data: dates, axisLabel: { color: c.text, fontSize: 10 }, axisLine: { show: false }, splitLine: { show: false } },
+      { type: "category", data: dates, axisLine: { lineStyle: { color: c.axis } }, axisLabel: { color: c.text, fontSize: 12 }, splitLine: { show: false } },
+      { type: "category", gridIndex: 1, data: dates, axisLabel: { color: c.text, fontSize: 12 }, axisLine: { show: false }, splitLine: { show: false } },
     ],
     yAxis: [
-      { scale: true, axisLabel: { color: c.text, fontSize: 10 }, splitLine: { lineStyle: { color: c.split } } },
+      { scale: true, axisLabel: { color: c.text, fontSize: 12 }, splitLine: { lineStyle: { color: c.split } } },
       {
         gridIndex: 1, scale: true,
         axisLabel: {
-          color: c.text, fontSize: 10,
+          color: c.text, fontSize: 12,
           formatter: (v) => `${((v / initial - 1) * 100).toFixed(0)}%`, // 纵轴以收益率百分比呈现
         },
         splitLine: { lineStyle: { color: c.split } },
@@ -107,7 +124,7 @@ function buildOption(run) {
     ],
     dataZoom: [
       { type: "inside", xAxisIndex: [0, 1], start: 0, end: 100 },
-      { type: "slider", xAxisIndex: [0, 1], bottom: 2, height: 16, borderColor: c.axis, backgroundColor: "rgba(124,144,196,0.08)", fillerColor: "rgba(34,211,238,0.15)", handleStyle: { color: c.brandA }, textStyle: { color: c.text, fontSize: 10 } },
+      { type: "slider", xAxisIndex: [0, 1], bottom: 2, height: 16, borderColor: c.axis, backgroundColor: c.split, fillerColor: c.brandA + "26", handleStyle: { color: c.brandA }, textStyle: { color: c.text, fontSize: 12 } },
     ],
     series: [
       {
@@ -120,7 +137,8 @@ function buildOption(run) {
       {
         name: "资金曲线", type: "line", xAxisIndex: 1, yAxisIndex: 1, symbol: "none",
         data: curve.map((p) => p.equity),
-        lineStyle: { width: 2.2, color: c.brandA, shadowBlur: 12, shadowColor: c.brandA },
+        markArea: ddArea,
+        lineStyle: { width: 2, color: c.brandA },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: c.brandA + "4d" },
@@ -131,7 +149,7 @@ function buildOption(run) {
       {
         name: "买入持有基准", type: "line", xAxisIndex: 1, yAxisIndex: 1, symbol: "none",
         data: curve.map((p) => p.benchmark),
-        lineStyle: { width: 1.4, color: c.brandB, type: "dashed" },
+        lineStyle: { width: 1.2, color: c.text2, type: "dashed" },
       },
     ],
   };

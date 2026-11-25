@@ -22,8 +22,13 @@ onUnauthorized(() => {
   if (auth.isLoggedIn) {
     auth.logout();
     toast.error("登录已过期,请重新登录");
-    router.push({ name: "login" });
+    const current = router.currentRoute.value;
+    router.push({
+      name: "login",
+      query: current.name && current.name !== "home" ? { next: current.fullPath } : {},
+    });
   }
 });
 
 app.mount("#app");
+sessionStorage.removeItem("fin_chunk_reload");

@@ -6,6 +6,7 @@ from .models import (
     AIConversation,
     AIMessage,
     BacktestRun,
+    CustomStrategy,
     Favorite,
     Stock,
 )
@@ -46,7 +47,7 @@ class StockSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Stock
-        fields = ("id", "symbol", "name", "price", "prev_close", "change", "change_pct",
+        fields = ("id", "symbol", "name", "kind", "price", "prev_close", "change", "change_pct",
                   "limit_pct", "lot_size", "is_active", "quote_source", "real_quote_at")
 
     def get_change(self, obj):
@@ -82,14 +83,46 @@ class AIConversationSerializer(serializers.ModelSerializer):
         fields = ("id", "title", "created_at", "messages")
 
 
+class CustomStrategySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomStrategy
+        fields = ("id", "name", "rule", "fits", "created_at", "updated_at")
+        read_only_fields = ("created_at", "updated_at")
+
+
+def _strategy_display_name(run):
+    """内置 → 本人自定义 → 原始 id 兜底(自定义删除后历史仍可读)。"""
+    from .services.quant import strategies as reg
+
+    spec = reg.get_strategy(run.strategy)
+    if spec:
+        return spec["name"]
+    if run.strategy.startswith("custom_") and run.strategy[7:].isdigit():
+        custom = CustomStrategy.objects.filter(pk=run.strategy[7:], user=run.user).first()
+        if custom:
+            return custom.name
+    return run.strategy
+
+
 class BacktestRunListSerializer(serializers.ModelSerializer):
+    strategy_name = serializers.SerializerMethodField()
+
     class Meta:
         model = BacktestRun
-        fields = ("id", "strategy", "symbol", "days", "initial_capital", "params", "metrics", "created_at")
+        fields = ("id", "strategy", "strategy_name", "symbol", "days", "initial_capital",
+                  "params", "metrics", "created_at")
+
+    def get_strategy_name(self, obj):
+        return _strategy_display_name(obj)
 
 
 class BacktestRunDetailSerializer(serializers.ModelSerializer):
+    strategy_name = serializers.SerializerMethodField()
+
     class Meta:
         model = BacktestRun
-        fields = ("id", "strategy", "symbol", "days", "initial_capital", "params",
+        fields = ("id", "strategy", "strategy_name", "symbol", "days", "initial_capital", "params",
                   "metrics", "equity_curve", "candles", "markers", "trades", "created_at")
+
+    def get_strategy_name(self, obj):
+        return _strategy_display_name(obj)

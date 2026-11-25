@@ -9,12 +9,13 @@ export const authRegister = (data) => client.post("/register/", data).then((r) =
 export const fetchStocks = () => client.get("/stocks/").then((r) => r.data);
 export const fetchIndices = () => client.get("/indices/").then((r) => r.data.indices);
 export const fetchKline = (params) => client.get("/kline/", { params }).then((r) => r.data);
-export const fetchSectors = () => client.get("/sectors/").then((r) => r.data);
 export const fetchMarketPulse = () => client.get("/market/pulse/").then((r) => r.data);
-export const fetchNews = () => client.get("/news/").then((r) => r.data);
+export const searchSymbols = (q) => client.get("/stocks/search/", { params: { q } }).then((r) => r.data);
+export const resolveStock = (symbol) => client.post("/stocks/resolve/", { symbol }).then((r) => r.data);
 
 /* ---- 自选 ---- */
 export const fetchFavorites = () => client.get("/favorites/").then((r) => r.data);
+export const fetchFavoritesSummary = () => client.get("/favorites/summary/").then((r) => r.data);
 export const addFavorite = (stockId) => client.post("/favorites/", { stock_id: stockId }).then((r) => r.data);
 export const removeFavorite = (id) => client.delete(`/favorites/${id}/`);
 
@@ -28,3 +29,7 @@ export const runBacktest = (payload) => client.post("/backtest/", payload).then(
 export const runCompare = (payload) => client.post("/backtest/compare/", payload).then((r) => r.data);
 export const fetchBacktestHistory = () => client.get("/backtest/history/").then((r) => r.data.runs);
 export const fetchBacktestDetail = (id) => client.get(`/backtest/history/${id}/`).then((r) => r.data.run);
+export const previewStrategy = (payload) => client.post("/backtest/preview/", payload).then((r) => r.data);
+export const createCustomStrategy = (payload) => client.post("/strategies/custom/", payload).then((r) => r.data.strategy);
+export const updateCustomStrategy = (id, payload) => client.put(`/strategies/custom/${id}/`, payload).then((r) => r.data.strategy);
+export const deleteCustomStrategy = (id) => client.delete(`/strategies/custom/${id}/`);

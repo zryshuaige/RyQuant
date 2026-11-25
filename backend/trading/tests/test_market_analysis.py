@@ -141,5 +141,5 @@ class StrategyAdviceTests(SimpleTestCase):
 class AiOfflineContextTests(BaseAPITestCase):
     def test_market_reply_includes_pulse(self):
         reply = mock_reply(self.user, "最近大盘走势如何?")
-        self.assertIn("市场脉冲", reply)
+        self.assertIn("大盘状态", reply)
         self.assertIn("涨", reply)

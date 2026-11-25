@@ -56,15 +56,21 @@ def _regime_breakdown(result, date_regime):
 
 
 def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=100000.0,
-                       oos_folds=OOS_FOLDS, lot=100):
+                       oos_folds=OOS_FOLDS, lot=100, extra_specs=None):
     """
     candles / index_candles: 升序 [{"time","open","high","low","close"}]。
     index_candles 缺省时用标的自身序列推断 regime。
+    extra_specs: 额外策略 spec(用户自定义),与内置同形状;默认 None 保持内置-only。
     """
+    from .custom import spec_max_window
+
     n = len(candles)
     closes = [c["close"] for c in candles]
-    ids = strategy_ids or [s["id"] for s in strategies.STRATEGIES]
+    ids = strategy_ids if strategy_ids is not None else [s["id"] for s in strategies.STRATEGIES]
     specs = [strategies.REGISTRY[i] for i in ids if i in strategies.REGISTRY]
+    if extra_specs:
+        known = {s["id"] for s in specs}
+        specs += [s for s in extra_specs if s["id"] not in known]
     if not specs:
         raise ValueError("no known strategies")
 
@@ -73,7 +79,9 @@ def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=1
     regimes = regime_series(reg_closes) if len(reg_closes) >= 25 else ["range"] * len(reg_candles)
     date_regime = {c["time"]: r for c, r in zip(reg_candles, regimes)}
 
-    warmup = min(WARMUP, max(n // 2, 1))
+    # 自定义策略窗口可能超过内置最长周期 → 预热取其最大窗口(仍按 n//2 封顶)
+    need = max([WARMUP] + [spec_max_window(s) for s in (extra_specs or [])])
+    warmup = min(need, max(n // 2, 1))
     eval_len = n - warmup
     fold_size = max(eval_len // oos_folds, 1)
 
@@ -119,7 +127,15 @@ def compare_strategies(candles, index_candles=None, strategy_ids=None, capital=1
                       for p in full["equity_curve"]],
         })
 
-    results.sort(key=lambda r: (r["oos"]["sharpe"], r["oos"]["return_pct"]), reverse=True)
+    # 有成交的策略优先:零交易策略的 Sharpe 为 0,不能排在真实亏损策略之前
+    results.sort(
+        key=lambda r: (
+            r["metrics"]["trade_count"] > 0,
+            r["oos"]["sharpe"],
+            r["oos"]["return_pct"],
+        ),
+        reverse=True,
+    )
     for rank, r in enumerate(results, 1):
         r["rank"] = rank
     return {
@@ -155,6 +171,7 @@ def strategy_advice(closes, current_regime, window=120):
         usable = bool(bucket and bucket["trade_count"] > 0)
         key = (
             1 if usable else 0,
+            1 if r["metrics"]["trade_count"] > 0 else 0,
             bucket["return_pct"] if usable else r["oos"]["return_pct"],
             r["oos"]["sharpe"],
         )

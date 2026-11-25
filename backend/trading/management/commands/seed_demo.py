@@ -1,15 +1,15 @@
 """
 一键生成演示数据(幂等,可重复执行):
-- 8 只示例股票 + 3 指数 + 250 根日 K + 最近一个交易日的分钟线(供图表与回测)
-  日 K 优先抓取**真实历史行情**(腾讯行情接口,前复权);网络不可用时自动回退为随机游走模拟
+- 24 只代表性股票(6 板块 × 4 只)+ 3 指数,用于大盘广度与板块统计
+  这不是完整股票库:任意标的可在应用内输入名称/代码按需注册,见 stock_registry
+- 日 K 优先抓取真实历史行情(腾讯,前复权),失败自动回退随机游走模拟
 - 演示账户(demo / demo123456)与管理员(admin / admin123456)
-- 演示自选股(加入日期回填到过去,K 线标注可见)
+- 演示自选 6 只(加入日期回填到过去,K 线标注可见,并参与加入以来收益统计)
 
 用法:
   python manage.py seed_demo                    # 首次生成;已存在的股票跳过
   python manage.py seed_demo --refresh-history  # 删除现有 K 线并重新抓取真实历史
 """
-import random
 from datetime import timedelta
 from decimal import Decimal
 
@@ -18,23 +18,39 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.utils import timezone
 
 from trading.models import Candle, Favorite, Stock
-from trading.services.market_data import (
-    HISTORY_BARS,
-    fetch_real_daily_netease,
-    fetch_real_daily_tencent,
-)
-
-TWO = Decimal("0.01")
+from trading.services.stock_registry import ensure_daily_history
 
 STOCKS = [
-    ("600519", "贵州茅台", "1688.00"),
-    ("000001", "平安银行", "13.88"),
-    ("688981", "中芯国际", "99.00"),
-    ("300750", "宁德时代", "188.50"),
+    # 金融
     ("601318", "中国平安", "42.30"),
-    ("000858", "五粮液", "141.20"),
-    ("002594", "比亚迪", "245.60"),
+    ("000001", "平安银行", "13.88"),
+    ("600036", "招商银行", "38.50"),
+    ("600030", "中信证券", "28.60"),
+    # 科技
+    ("688981", "中芯国际", "99.00"),
     ("600410", "华胜天成", "22.80"),
+    ("002415", "海康威视", "31.20"),
+    ("603501", "韦尔股份", "118.00"),
+    # 消费
+    ("600519", "贵州茅台", "1688.00"),
+    ("000858", "五粮液", "141.20"),
+    ("000333", "美的集团", "72.50"),
+    ("600887", "伊利股份", "28.40"),
+    # 新能源
+    ("300750", "宁德时代", "188.50"),
+    ("002594", "比亚迪", "245.60"),
+    ("601012", "隆基绿能", "18.90"),
+    ("300274", "阳光电源", "78.30"),
+    # 医药
+    ("600276", "恒瑞医药", "46.80"),
+    ("300760", "迈瑞医疗", "268.00"),
+    ("000538", "云南白药", "57.20"),
+    ("600196", "复星医药", "26.40"),
+    # 能源
+    ("601899", "紫金矿业", "17.80"),
+    ("600028", "中国石化", "6.20"),
+    ("601857", "中国石油", "8.10"),
+    ("601088", "中国神华", "39.50"),
 ]
 
 INDICES = [
@@ -46,94 +62,21 @@ INDICES = [
 DEMO_USERNAME, DEMO_PASSWORD = "demo", "demo123456"
 ADMIN_USERNAME, ADMIN_PASSWORD = "admin", "admin123456"
 
-# 演示自选:加入日期回填天数(让 K 线 markLine 落在可视窗口内)
-DEMO_FAVORITES = [("600519", 45), ("300750", 20), ("688981", 8)]
+# 演示自选:加入日期回填天数(控制在 45 天内,K 线默认可视窗口能看到金色标注)
+DEMO_FAVORITES = [
+    ("600519", 45),
+    ("300750", 20),
+    ("688981", 8),
+    ("000858", 35),
+    ("601318", 12),
+    ("002594", 28),
+]
 
-
-def _business_dates(count: int):
-    """自今日(含)向前的 count 个交易日(跳过周末),用于模拟数据。"""
-    dates = []
-    cursor = timezone.localdate()
-    while len(dates) < count:
-        if cursor.weekday() < 5:
-            dates.append(cursor)
-        cursor -= timedelta(days=1)
-    return dates
-
-
-def _simulate_closes(end_price: Decimal, count: int, seed: str):
-    """随机游走生成 count 个收盘价(升序,末位=end_price)。"""
-    rnd = random.Random(f"hist-{seed}")
-    closes = [end_price] * count
-    for i in range(count - 2, -1, -1):
-        closes[i] = (closes[i + 1] / (1 + Decimal(str(rnd.uniform(-0.025, 0.025))))).quantize(TWO)
-    return closes, rnd
-
-
-def _seed_history(stock: Stock, fallback_price: Decimal, out) -> None:
-    """写入 250 根日 K(真实优先)+ 最近一个交易日分钟线,并更新现价/昨收。"""
-    real = fetch_real_daily_tencent(stock.symbol) or fetch_real_daily_netease(stock.symbol)
-
-    if real and len(real) >= 60:
-        source = "真实历史"
-        # 数据源可能包含重复日期(停牌复牌等),按日期去重保序
-        dedup = {}
-        for date_str, o, c, h, l, vol in real:
-            key = str(date_str)
-            if key not in dedup and c > 0:
-                dedup[key] = (date_str, o, c, h, l, vol)
-        rows = []
-        for date_str, o, c, h, l, vol in dedup.values():
-            t = timezone.make_aware(timezone.datetime.strptime(date_str, "%Y%m%d")) \
-                if len(date_str) == 8 and date_str.isdigit() \
-                else timezone.make_aware(timezone.datetime.strptime(date_str, "%Y-%m-%d"))
-            rows.append(Candle(stock=stock, period=Candle.Period.DAY, time=t,
-                               open=o, high=h, low=l, close=c, volume=vol,
-                               source=Candle.Source.REAL))
-        closes = [r.close for r in rows]
-    else:
-        source = "模拟"
-        dates = _business_dates(HISTORY_BARS)
-        closes, rnd = _simulate_closes(fallback_price, HISTORY_BARS, stock.symbol)
-        rows = []
-        for date, close_price in zip(dates, closes):
-            open_price = (close_price * (1 + Decimal(str(rnd.uniform(-0.01, 0.01))))).quantize(TWO)
-            high = max(open_price, close_price) * (1 + Decimal(str(rnd.uniform(0, 0.015)))).quantize(TWO)
-            low = min(open_price, close_price) * (1 - Decimal(str(rnd.uniform(0, 0.015)))).quantize(TWO)
-            rows.append(Candle(
-                stock=stock, period=Candle.Period.DAY,
-                time=timezone.make_aware(timezone.datetime(date.year, date.month, date.day)),
-                open=open_price, high=high, low=low, close=close_price,
-                volume=rnd.randint(80_000, 3_000_000),
-            ))
-    Candle.objects.bulk_create(rows, batch_size=500, ignore_conflicts=True)
-    # 最近一个交易日的分钟线(09:30-11:30 / 13:00-15:00),围绕最新收盘价模拟
-    rnd = random.Random(f"min-{stock.symbol}")
-    last_date = timezone.localdate()
-    while last_date.weekday() >= 5:  # 分钟线只落在交易日(周末回退到周五)
-        last_date -= timedelta(days=1)
-    minute_closes = [closes[-1]]
-    for _ in range(239):
-        minute_closes.append((minute_closes[-1] * (1 + Decimal(str(rnd.uniform(-0.004, 0.004))))).quantize(TWO))
-    minute_rows = []
-    for i, c in enumerate(minute_closes):
-        offset = i if i < 120 else i + 60  # 跳过午休 60 分钟
-        t = timezone.datetime(last_date.year, last_date.month, last_date.day, 9, 30) + timedelta(minutes=offset)
-        minute_rows.append(Candle(
-            stock=stock, period=Candle.Period.MINUTE, time=timezone.make_aware(t),
-            open=c, high=c, low=c, close=c, volume=rnd.randint(stock.lot_size, stock.lot_size * 6),
-        ))
-    # ignore_conflicts:与运行中的行情模拟器并发时,同一分钟 K 线可能已被服务端创建,安全跳过
-    Candle.objects.bulk_create(minute_rows, batch_size=500, ignore_conflicts=True)
-
-    stock.price = closes[-1]
-    stock.prev_close = closes[-2]
-    stock.save(update_fields=["price", "prev_close", "updated_at"])
-    out(f"    K 线来源:{source}({len(rows)} 根,最新收盘 {closes[-1]})")
+SOURCE_LABEL = {"existing": "已有历史", "real": "真实历史", "sim": "模拟历史"}
 
 
 class Command(BaseCommand):
-    help = "生成演示数据:股票/真实历史K线(离线自动模拟)/演示账户/自选股(幂等)"
+    help = "生成演示数据:24 只演示标的/真实历史K线(离线自动模拟)/演示账户/自选股(幂等)"
 
     def add_arguments(self, parser: CommandParser):
         parser.add_argument("--refresh-history", action="store_true",
@@ -142,18 +85,19 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         refresh = options["refresh_history"]
 
-        # 1. 股票与历史行情(指数 kind=index,仅供行情展示与回测)
+        # 1. 演示股票池 + 指数(仅用于行情展示、广度统计与回测)
         for symbol, name, price in STOCKS:
             stock, created = Stock.objects.get_or_create(symbol=symbol, defaults={"name": name})
             if created:
                 self.stdout.write(f"  + 股票 {symbol} {name}")
-                _seed_history(stock, Decimal(price), self.stdout.write)
             elif refresh:
                 Candle.objects.filter(stock=stock).delete()
                 self.stdout.write(f"  ↻ 股票 {symbol} {name} 刷新历史")
-                _seed_history(stock, stock.price or Decimal(price), self.stdout.write)
             else:
                 self.stdout.write(f"  = 股票 {symbol} {name} 已存在,跳过(--refresh-history 可刷新)")
+                continue
+            source = ensure_daily_history(stock, fallback_price=Decimal(price))
+            self.stdout.write(f"    K 线来源:{SOURCE_LABEL.get(source, source)}")
 
         for symbol, name, price in INDICES:
             stock, created = Stock.objects.get_or_create(
@@ -162,13 +106,14 @@ class Command(BaseCommand):
             )
             if created:
                 self.stdout.write(f"  + 指数 {symbol} {name}")
-                _seed_history(stock, Decimal(price), self.stdout.write)
             elif refresh:
                 Candle.objects.filter(stock=stock).delete()
                 self.stdout.write(f"  ↻ 指数 {symbol} {name} 刷新历史")
-                _seed_history(stock, stock.price or Decimal(price), self.stdout.write)
             else:
                 self.stdout.write(f"  = 指数 {symbol} {name} 已存在,跳过")
+                continue
+            source = ensure_daily_history(stock, fallback_price=Decimal(price))
+            self.stdout.write(f"    K 线来源:{SOURCE_LABEL.get(source, source)}")
 
         # 2. 管理员与演示账户
         if not User.objects.filter(username=ADMIN_USERNAME).exists():
@@ -186,7 +131,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"  = 演示账户 {DEMO_USERNAME} 已存在")
 
-        # 3. 演示自选股:加入日期回填到过去,K 线标注落在可视窗口
+        # 3. 演示自选股:加入日期回填到过去,K 线标注落在默认可视窗口
         now = timezone.localtime()
         for symbol, days_ago in DEMO_FAVORITES:
             fav, fav_created = Favorite.objects.get_or_create(

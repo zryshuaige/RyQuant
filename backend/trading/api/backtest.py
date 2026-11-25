@@ -1,29 +1,56 @@
-"""VIP 量化回测:策略列表 / 运行回测 / 历史记录。"""
+"""量化回测:策略列表 / 运行回测 / 历史记录。"""
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models import BacktestRun, Candle, Stock
+from ..models import BacktestRun, Candle, CustomStrategy, Stock
 from ..services.errors import BusinessError
 from ..serializers import BacktestRunDetailSerializer, BacktestRunListSerializer
 from ..services.quant import strategies as strategy_registry
+from ..services.quant.custom import build_spec, validate_rule
 from ..services.quant.engine import run_backtest
-from .throttling import BacktestThrottle
+from ..services.quant.preview import build_preview
+from .throttling import BacktestThrottle, PreviewThrottle
 
 MIN_DAYS, MAX_DAYS = 30, 250
 
 
+def _public_spec(s):
+    """策略 spec → 前端契约(不含 signals 可调用对象)。"""
+    out = {
+        "id": s["id"], "name": s["name"], "description": s["description"],
+        "essence": s["essence"], "buy_rule": s["buy_rule"], "sell_rule": s["sell_rule"],
+        "fits": s["fits"], "risk": s["risk"], "presets": s["presets"],
+        "params": s["params"], "custom": bool(s.get("custom")),
+    }
+    if s.get("custom"):
+        out["rule"] = s["rule"]
+    return out
+
+
+def _resolve_spec(request, strategy_id):
+    """内置注册表 ∪ 本人自定义策略;未知 id → None。"""
+    spec = strategy_registry.get_strategy(strategy_id)
+    if spec is not None:
+        return spec
+    if strategy_id.startswith("custom_") and strategy_id[7:].isdigit():
+        row = CustomStrategy.objects.filter(pk=strategy_id[7:], user=request.user).first()
+        if row is not None:
+            return build_spec(row.rule, row.name, fits=row.fits, pk=row.pk)
+    return None
+
+
 class StrategyListView(APIView):
-    """GET /api/strategies/ — 内置策略 + 参数 schema(登录即可浏览,运行需 VIP)。"""
+    """GET /api/strategies/ — 内置策略 + 本人自定义 + 白话解释 + 买卖规则 + 参数 schema 与预设。"""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"strategies": [
-            {"id": s["id"], "name": s["name"], "description": s["description"], "params": s["params"]}
-            for s in strategy_registry.STRATEGIES
-        ]})
+        specs = list(strategy_registry.STRATEGIES)
+        specs += [build_spec(c.rule, c.name, fits=c.fits, pk=c.pk)
+                  for c in CustomStrategy.objects.filter(user=request.user)]
+        return Response({"strategies": [_public_spec(s) for s in specs]})
 
 
 class BacktestRunView(APIView):
@@ -37,7 +64,7 @@ class BacktestRunView(APIView):
 
     def post(self, request):
         data = request.data
-        spec = strategy_registry.get_strategy(str(data.get("strategy", "")))
+        spec = _resolve_spec(request, str(data.get("strategy", "")))
         if spec is None:
             raise BusinessError("未知策略,请从 /api/strategies/ 中选择")
 
@@ -133,10 +160,14 @@ class BacktestCompareView(APIView):
         payload = [_candle_payload(c) for c in candles]
 
         ids = data.get("strategies")
+        extra_specs = []
         if ids not in (None, ""):
-            if not isinstance(ids, list) or not all(strategy_registry.get_strategy(str(i)) for i in ids):
+            if not isinstance(ids, list) or not all(_resolve_spec(request, str(i)) for i in ids):
                 raise BusinessError("strategies 需为已知策略 id 列表")
             ids = [str(i) for i in ids]
+            builtin_ids = [i for i in ids if i in strategy_registry.REGISTRY]
+            extra_specs = [_resolve_spec(request, i) for i in ids if i not in strategy_registry.REGISTRY]
+            ids = builtin_ids
 
         index_payload = None
         anchor = Stock.objects.filter(kind=Stock.Kind.INDEX).order_by("pk").first()
@@ -148,10 +179,54 @@ class BacktestCompareView(APIView):
                 index_payload = [_candle_payload(c) for c in index_candles]
 
         lot = stock.lot_size if stock.kind == Stock.Kind.STOCK else 1
-        result = compare_strategies(payload, index_payload, strategy_ids=ids, capital=capital, lot=lot)
+        result = compare_strategies(payload, index_payload, strategy_ids=ids, capital=capital,
+                                    lot=lot, extra_specs=extra_specs or None)
         result["symbol"] = stock.symbol
         result["name"] = stock.name
         return Response(result)
+
+
+class BacktestPreviewView(APIView):
+    """
+    POST /api/backtest/preview/ — body: {strategy|rule, symbol|stock_id, days?, params?}
+    策略实时预览:K 线 + 指标叠加线/副图 + 信号标记 + 白话买卖句。不跑引擎、不持久化。
+    rule 内联时供搭建器「边搭边看」,无需先保存。
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [PreviewThrottle]
+
+    def post(self, request):
+        data = request.data
+        if data.get("rule"):
+            spec = build_spec(validate_rule(data["rule"]), str(data.get("name") or "我的策略"))
+        else:
+            spec = _resolve_spec(request, str(data.get("strategy", "")))
+            if spec is None:
+                raise BusinessError("未知策略,请从 /api/strategies/ 中选择")
+
+        stock = BacktestRunView._resolve_stock(data)
+        days = BacktestRunView._parse_int(data.get("days", 120), "days", MIN_DAYS, MAX_DAYS)
+        candles = list(
+            Candle.objects.filter(stock=stock, period=Candle.Period.DAY).order_by("-time")[: days + 1]
+        )[::-1]
+        if len(candles) < 10:
+            raise BusinessError(f"历史数据不足({len(candles)} 根),无法预览")
+        payload = [_candle_payload(c) for c in candles]
+        closes = [c["close"] for c in payload]
+
+        from ..services.quant.strategies import clean_params
+        params = clean_params(spec, data.get("params") or {})
+        preview = build_preview(spec, closes, params)
+        return Response({
+            "candles": payload,
+            "preview": preview,
+            "params": params,
+            "params_schema": spec["params"],
+            "name": spec["name"],
+            "buy_text": spec["buy_rule"].format(**params),
+            "sell_text": spec["sell_rule"].format(**params),
+        })
 
 
 def _candle_payload(c):

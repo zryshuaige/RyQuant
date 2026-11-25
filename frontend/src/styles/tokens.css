@@ -1,38 +1,69 @@
 /* ============================================================
-   RyQuant 设计令牌 — 默认深色 "Aurora Terminal" / 可选浅色
-   切换方式:<html data-theme="light">
+   RyQuant 设计令牌 — Reverie(浅)/ Yonder(深)
+   参考 zryshuaige.github.io/RyPage 的设计语言;底色按用户要求取天蓝色相
+   (参考站默认 earth 空间为雾青偏绿,已整体移蓝)
+   衬线展示字 / Manrope 正文 / 等宽小标签;红涨绿跌只用于行情语义
+   切换方式:<html data-theme="reverie|yonder">
    ============================================================ */
 :root {
-  /* 背景层 */
-  --bg-0: #05070d;
-  --bg-1: #0a0f1a;
-  --panel: rgba(15, 22, 38, 0.72);
-  --panel-solid: #101727;
-  --panel-hover: rgba(26, 35, 58, 0.85);
-  --glass-blur: 18px;
+  /* 表面:天蓝雾底;数据面不透明保证可读,铬层半透明+磨砂 */
+  --bg-0: #e9f1f8;
+  --bg-1: #e2ecf5;
+  --panel: #f7fafd;
+  --panel-solid: #f7fafd;
+  --panel-hover: #ecf3f9;
+  --panel-chrome: rgba(247, 250, 253, 0.78);
+  --inset-bg: #e7eff7;
+  --inset-bg-soft: #eff5fa;
+  --header-bg: rgba(233, 241, 248, 0.74);
+  --toast-bg: rgba(247, 250, 253, 0.92);
 
-  /* 内嵌表面(输入框 / 统计块 / 列表项) */
-  --inset-bg: rgba(5, 9, 18, 0.55);
-  --inset-bg-soft: rgba(5, 9, 18, 0.35);
-  --header-bg: rgba(6, 9, 16, 0.72);
-  --overlay-bg: rgba(3, 6, 12, 0.66);
-  --modal-bg: linear-gradient(180deg, rgba(23, 31, 51, 0.96), rgba(14, 20, 34, 0.96));
-  --toast-bg: linear-gradient(180deg, rgba(26, 34, 55, 0.97), rgba(16, 22, 38, 0.97));
+  /* 发丝描边(navy 18% / 30%) */
+  --border: rgba(29, 41, 64, 0.18);
+  --border-strong: rgba(29, 41, 64, 0.3);
 
-  /* 极光光晕 */
-  --aurora-1: rgba(34, 211, 238, 0.16);
-  --aurora-2: rgba(139, 92, 246, 0.17);
-  --aurora-3: rgba(0, 212, 156, 0.08);
-  --grid-line: rgba(124, 144, 196, 0.05);
+  /* 交互表面 = accent 10% */
+  --hover-bg: rgba(61, 135, 184, 0.1);
 
-  /* 描边 */
-  --border: rgba(124, 144, 196, 0.16);
-  --border-strong: rgba(124, 144, 196, 0.34);
+  /* 文本 */
+  --text-1: #1d2940;
+  --text-2: #4a5a70;
+  --text-3: #56657c;
 
-  /* 交互表面 */
-  --hover-bg: rgba(124, 144, 196, 0.1);
-  --up-hover: #ff6272;
-  --down-hover: #17e0ac;
+  /* 涨跌(A 股惯例:红涨绿跌),只用于行情语义 */
+  --up: #c2453a;
+  --up-bg: rgba(194, 69, 58, 0.1);
+  --down: #2f8f6b;
+  --down-bg: rgba(47, 143, 107, 0.1);
+  --flat: #56657c;
+
+  /* 品牌与功能色:天蓝强调 */
+  --accent: #3d87b8;
+  --accent-hover: #2f6d97;
+  --accent-text: #2f6d97;
+  --accent-bg: rgba(61, 135, 184, 0.1);
+  --on-accent: #f7fafd;
+  --btn-primary-bg: #1d2940;
+  --btn-primary-fg: #f4f8fc;
+  --btn-primary-hover-bg: #2f6d97;
+  --btn-primary-hover-fg: #f7fafd;
+  --gold: #a8823c;
+  --gold-bg: rgba(168, 130, 60, 0.12);
+  --gold-border: rgba(168, 130, 60, 0.38);
+  --danger: #b3372c;
+  --danger-bg: rgba(179, 55, 44, 0.08);
+  --ok: #2f8f6b;
+  --warn: #9a6a12;
+  --warn-bg: rgba(154, 106, 18, 0.1);
+
+  /* 图表 */
+  --chart-text: #56657c;
+  --chart-split: rgba(29, 41, 64, 0.08);
+  --chart-axis: rgba(29, 41, 64, 0.22);
+  --chart-tooltip-bg: #f7fafd;
+  --chart-tooltip-border: rgba(29, 41, 64, 0.18);
+  --chart-s5: #7a63c9;
+  --chart-s6: #3f9e8f;
 
   /* 间距刻度 */
   --space-1: 4px;
@@ -40,105 +71,97 @@
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
-  --space-6: 28px;
+  --space-6: 24px;
+  --space-7: 32px;
 
-  /* 文本 */
-  --text-1: #e9eef8;
-  --text-2: #a7b2c7;
-  --text-3: #66738b;
+  /* 字号(可见文字最小 12px) */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 30px;
 
-  /* 涨跌(A 股惯例:红涨绿跌) */
-  --up: #ff4d5e;
-  --up-bg: rgba(255, 77, 94, 0.12);
-  --down: #00d49c;
-  --down-bg: rgba(0, 212, 156, 0.12);
-  --flat: #8f9aad;
-
-  /* 品牌与功能色 */
-  --brand-a: #22d3ee;
-  --brand-b: #8b5cf6;
-  --brand-grad: linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%);
-  --gold: #f6c453;
-  --danger: #ff5470;
-  --ok: #00d49c;
-  --warn: #ffb454;
-  --on-brand: #07101c;
-
-  /* 图表 */
-  --chart-text: #66738b;
-  --chart-split: rgba(124, 144, 196, 0.1);
-  --chart-axis: rgba(124, 144, 196, 0.3);
-  --chart-tooltip-bg: rgba(10, 15, 26, 0.94);
-  --chart-tooltip-border: rgba(124, 144, 196, 0.34);
-
-  /* 圆角与阴影 */
-  --radius-lg: 18px;
+  /* 圆角:大面板 20 / 控件 12 / 小件 8 / 胶囊 999 */
+  --radius-lg: 20px;
   --radius: 12px;
   --radius-sm: 8px;
-  --shadow-1: 0 8px 28px rgba(0, 0, 0, 0.45);
-  --glow-brand: 0 0 22px rgba(34, 211, 238, 0.22);
-  --glow-violet: 0 0 26px rgba(139, 92, 246, 0.25);
+  --radius-pill: 999px;
 
-  /* 字体 */
-  --font-num: "JetBrains Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
-  --font-ui: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  /* 彩色软阴影 + 内顶高光 */
+  --shadow-color: rgba(12, 34, 48, 0.12);
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 8px 28px var(--shadow-color);
+  --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 16px 44px rgba(12, 34, 48, 0.16);
+  --ring: 0 0 0 3px rgba(61, 135, 184, 0.25);
+  --blur-chrome: 18px;
+
+  /* 字体三件套:衬线展示 / Manrope 正文与表格数字 / 等宽小标签 */
+  --font-display: "Iowan Old Style", "Baskerville", "Times New Roman", "Songti SC", "SimSun", serif;
+  --font-ui: "Manrope", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace, monospace;
+  --font-num: var(--font-ui);
 
   /* 动效 */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
-/* ---------- 浅色主题 ---------- */
-:root[data-theme="light"] {
-  --bg-0: #eef1f8;
-  --bg-1: #e4e9f4;
-  --panel: rgba(255, 255, 255, 0.86);
-  --panel-solid: #ffffff;
-  --panel-hover: rgba(255, 255, 255, 0.98);
-  --inset-bg: rgba(23, 35, 66, 0.055);
-  --inset-bg-soft: rgba(23, 35, 66, 0.035);
-  --header-bg: rgba(255, 255, 255, 0.78);
-  --overlay-bg: rgba(23, 35, 66, 0.32);
-  --modal-bg: linear-gradient(180deg, #ffffff, #f4f7fd);
-  --toast-bg: linear-gradient(180deg, #ffffff, #f2f6fd);
+/* ---------- Yonder(深) ---------- */
+:root[data-theme="yonder"] {
+  --bg-0: #08131b;
+  --bg-1: #0a1720;
+  --panel: #0f1d27;
+  --panel-solid: #0f1d27;
+  --panel-hover: #14242f;
+  --panel-chrome: rgba(15, 29, 39, 0.78);
+  --inset-bg: #0b1822;
+  --inset-bg-soft: #0d1b25;
+  --header-bg: rgba(8, 19, 27, 0.74);
+  --toast-bg: rgba(15, 29, 39, 0.92);
 
-  --aurora-1: rgba(34, 211, 238, 0.14);
-  --aurora-2: rgba(139, 92, 246, 0.12);
-  --aurora-3: rgba(0, 180, 130, 0.08);
-  --grid-line: rgba(30, 45, 90, 0.05);
+  --border: rgba(171, 207, 216, 0.19);
+  --border-strong: rgba(171, 207, 216, 0.32);
+  --hover-bg: rgba(154, 207, 228, 0.1);
 
-  --border: rgba(30, 45, 90, 0.13);
-  --border-strong: rgba(30, 45, 90, 0.26);
+  --text-1: #e2ecee;
+  --text-2: #a6bac4;
+  --text-3: #7f96a2;
 
-  --hover-bg: rgba(30, 45, 90, 0.06);
-  --up-hover: #c00f28;
-  --down-hover: #00805c;
+  --up: #ff8f80;
+  --up-bg: rgba(255, 143, 128, 0.12);
+  --down: #6fd3a8;
+  --down-bg: rgba(111, 211, 168, 0.12);
+  --flat: #a6bac4;
 
-  --text-1: #18233b;
-  --text-2: #45526b;
-  --text-3: #7d8899;
+  --accent: #9acfe4;
+  --accent-hover: #bfe2f0;
+  --accent-text: #9acfe4;
+  --accent-bg: rgba(154, 207, 228, 0.12);
+  --on-accent: #08131b;
+  --btn-primary-bg: #e2ecee;
+  --btn-primary-fg: #08131b;
+  --btn-primary-hover-bg: #9acfe4;
+  --btn-primary-hover-fg: #08131b;
+  --gold: #d9b36a;
+  --gold-bg: rgba(217, 179, 106, 0.12);
+  --gold-border: rgba(217, 179, 106, 0.4);
+  --danger: #ff6b7d;
+  --danger-bg: rgba(255, 107, 125, 0.1);
+  --ok: #6fd3a8;
+  --warn: #d9b36a;
+  --warn-bg: rgba(217, 179, 106, 0.1);
 
-  --up: #e01430;
-  --up-bg: rgba(224, 20, 48, 0.09);
-  --down: #00996e;
-  --down-bg: rgba(0, 153, 110, 0.1);
-  --flat: #8590a2;
+  --chart-text: #a6bac4;
+  --chart-split: rgba(171, 207, 216, 0.1);
+  --chart-axis: rgba(171, 207, 216, 0.26);
+  --chart-tooltip-bg: #0f1d27;
+  --chart-tooltip-border: rgba(171, 207, 216, 0.19);
+  --chart-s5: #b39ddb;
+  --chart-s6: #7fd4c1;
 
-  --brand-a: #0891b2;
-  --brand-b: #7c3aed;
-  --brand-grad: linear-gradient(135deg, #0891b2 0%, #7c3aed 100%);
-  --gold: #b47d0e;
-  --danger: #dc2626;
-  --ok: #00996e;
-  --warn: #b45309;
-  --on-brand: #ffffff;
-
-  --chart-text: #7d8899;
-  --chart-split: rgba(30, 45, 90, 0.09);
-  --chart-axis: rgba(30, 45, 90, 0.22);
-  --chart-tooltip-bg: rgba(255, 255, 255, 0.97);
-  --chart-tooltip-border: rgba(30, 45, 90, 0.2);
-
-  --shadow-1: 0 8px 26px rgba(30, 45, 90, 0.12);
-  --glow-brand: 0 0 18px rgba(8, 145, 178, 0.18);
-  --glow-violet: 0 0 20px rgba(124, 58, 237, 0.16);
+  --shadow-color: rgba(0, 0, 0, 0.28);
+  --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 28px var(--shadow-color);
+  --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 44px rgba(0, 0, 0, 0.47);
+  --ring: 0 0 0 3px rgba(154, 207, 228, 0.28);
 }

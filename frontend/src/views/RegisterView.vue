@@ -36,7 +36,7 @@ async function submit() {
       email: email.value.trim(),
       password: password.value,
     });
-    toast.success(`注册成功,欢迎加入,${data.user.username}!`);
+    toast.success(`注册成功,欢迎 ${data.user.username}`);
     router.push(route.query.next || { name: "home" });
   } catch (e) {
     error.value = e.friendlyMessage || "注册失败";
@@ -48,11 +48,11 @@ async function submit() {
 
 <template>
   <div class="page auth-page">
-    <div class="panel-gradient auth-card">
-      <form class="panel" style="border: none" @submit.prevent="submit">
-        <h1 class="auth-title">创建账户</h1>
-        <p class="auth-sub">加入 RyQuant · 体验完整模拟交易闭环</p>
+    <div class="panel auth-card">
+      <h1 class="auth-title">创建账户</h1>
+      <p class="auth-sub">建立自选、保存回测记录并使用研究助手。</p>
 
+      <form @submit.prevent="submit">
         <div class="field">
           <label for="reg-username">用户名</label>
           <input id="reg-username" v-model="username" class="input" autocomplete="username" placeholder="3 个字符以上" />
@@ -67,20 +67,20 @@ async function submit() {
         </div>
         <div class="field">
           <label for="reg-confirm">确认密码</label>
-          <input id="reg-confirm" v-model="confirm" class="input" type="password" autocomplete="new-password" placeholder="再次输入密码" />
+          <input id="reg-confirm" v-model="confirm" class="input" type="password" autocomplete="new-password" />
         </div>
 
         <div v-if="error" class="field-error" role="alert"><AppIcon name="warn" :size="13" /> {{ error }}</div>
 
-        <button class="btn btn-primary btn-block" type="submit" :disabled="loading" style="margin-top: 10px">
+        <button class="btn btn-primary btn-block" type="submit" :disabled="loading">
           <span v-if="loading" class="spinner"></span>
           {{ loading ? "注册中…" : "注册" }}
         </button>
-
-        <p class="auth-foot">
-          已有账户?<router-link :to="{ name: 'login', query: route.query }">直接登录</router-link>
-        </p>
       </form>
+
+      <p class="auth-foot">
+        已有账户?<router-link :to="{ name: 'login', query: route.query }">直接登录</router-link>
+      </p>
     </div>
   </div>
 </template>
@@ -88,7 +88,7 @@ async function submit() {
 <style scoped>
 .auth-page { display: flex; justify-content: center; padding-top: 6vh; }
 .auth-card { width: 100%; max-width: 420px; }
-.auth-title { font-size: 24px; text-align: center; }
-.auth-sub { text-align: center; color: var(--text-3); margin: 6px 0 20px; font-size: 13px; }
-.auth-foot { text-align: center; color: var(--text-3); font-size: 13px; margin: 14px 0 0; }
+.auth-title { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 600; letter-spacing: -0.02em; }
+.auth-sub { color: var(--text-2); margin: 6px 0 20px; font-size: var(--fs-sm); }
+.auth-foot { color: var(--text-2); font-size: var(--fs-sm); margin: 14px 0 0; }
 </style>

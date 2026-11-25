@@ -1,164 +1,245 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useMarketStore } from "../stores/market";
 import { fetchMarketPulse } from "../api";
+import { toast } from "../composables/useToast";
 import IndexCard from "../components/IndexCard.vue";
 import KlineChart from "../components/KlineChart.vue";
 import StockTable from "../components/StockTable.vue";
-import MarketPulse from "../components/MarketPulse.vue";
+import MarketStatus from "../components/MarketStatus.vue";
+import WatchlistRail from "../components/WatchlistRail.vue";
+import SymbolSearch from "../components/SymbolSearch.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const auth = useAuthStore();
 const market = useMarketStore();
 const route = useRoute();
+const router = useRouter();
 
-const selected = ref(null);
-const search = ref("");
-// 深链 ?symbol= 同步初始化,避免默认指数与目标标的两次请求竞态
+const selectedSymbol = ref("");
 const klineTarget = ref({ symbol: String(route.query.symbol || "") || "sh000001", name: "" });
-
-const pulse = ref(null); // 市场脉冲(60s 刷新,服务端亦有 TTL 缓存)
+const pulse = ref(null);
+const pulseLoading = ref(true);
 let pulseTimer = null;
+let summaryTimer = null;
 
 const realIndices = computed(() => market.indices.filter((i) => i.symbol));
-
-const filteredStocks = computed(() => {
-  const kw = search.value.trim().toLowerCase();
-  if (!kw) return market.activeStocks;
-  return market.activeStocks.filter((s) => s.symbol.toLowerCase().includes(kw) || s.name.includes(kw));
+const klineStock = computed(() =>
+  market.stocks.find((s) => s.symbol === klineTarget.value.symbol) || null
+);
+const isFavorite = computed(() => Boolean(klineStock.value && market.favoriteStockIds.has(klineStock.value.id)));
+const favoritePending = computed(() =>
+  Boolean(klineStock.value && market.pendingFavoriteIds.includes(klineStock.value.id))
+);
+const sourceText = computed(() => {
+  if (market.error || market.stale) return "行情已过期";
+  return pulse.value?.quote_source === "real" ? "腾讯实时" : "模拟行情";
+});
+const sourceClass = computed(() => {
+  if (market.error || market.stale) return "stale";
+  return pulse.value?.quote_source === "real" ? "" : "sim";
+});
+const updatedText = computed(() => {
+  if (market.lastUpdated) {
+    return new Date(market.lastUpdated).toLocaleTimeString("zh-CN", { hour12: false });
+  }
+  if (pulse.value?.generated_at) {
+    return new Date(pulse.value.generated_at).toLocaleTimeString("zh-CN", { hour12: false });
+  }
+  return "--:--:--";
 });
 
 async function loadPulse() {
   if (document.hidden) return;
   try {
     pulse.value = await fetchMarketPulse();
-  } catch { /* 脉冲失败不阻塞首页 */ }
+  } catch { /* 顶部状态会提示行情过期 */ }
+  finally { pulseLoading.value = false; }
 }
 
-function selectStock(stock) {
-  selected.value = stock;
-  klineTarget.value = { symbol: stock.symbol, name: stock.name };
+async function loadWatchlist() {
+  if (!auth.isLoggedIn) return;
+  if (!market.favorites.length) await market.fetchFavorites();
+  await market.fetchFavoritesSummary();
 }
-function selectIndex(idx) {
-  klineTarget.value = { symbol: idx.symbol, name: idx.name };
+
+function resolveTargetName(symbol) {
+  const stock = market.stocks.find((s) => s.symbol === symbol);
+  const index = market.indices.find((i) => i.symbol === symbol);
+  return { symbol, name: stock?.name || index?.name || "" };
+}
+
+function scrollToKline() {
+  nextTick(() => {
+    const el = document.getElementById("kline-panel");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function openTarget(target, { scroll = true } = {}) {
+  klineTarget.value = {
+    symbol: target.symbol,
+    name: target.name || resolveTargetName(target.symbol).name,
+  };
+  const isIndex = target.kind === "index" || market.indices.some((i) => i.symbol === target.symbol);
+  selectedSymbol.value = isIndex ? "" : target.symbol;
+  if (route.query.symbol !== target.symbol) {
+    router.replace({ name: "home", query: { symbol: target.symbol } });
+  }
+  if (scroll) scrollToKline();
+}
+
+function selectStock(stock) { openTarget(stock); }
+function selectIndex(index) {
+  if (!index.symbol) return;
+  openTarget({ ...index, kind: "index" });
+}
+
+async function toggleFavorite(stock) {
+  if (!auth.isLoggedIn) {
+    toast.info("登录后可添加自选");
+    router.push({ name: "login", query: { next: route.fullPath } });
+    return;
+  }
+  await market.toggleFavorite(stock);
+}
+
+async function toggleKlineFavorite() {
+  if (!klineStock.value) return;
+  if (!auth.isLoggedIn) {
+    toast.info("登录后可添加自选");
+    router.push({ name: "login", query: { next: route.fullPath } });
+    return;
+  }
+  await market.toggleFavorite(klineStock.value);
+}
+
+function goBacktest(strategyId) {
+  const anchor = pulse.value?.anchor?.symbol || "sh000001";
+  router.push({ name: "backtest", query: { symbol: anchor, strategy: strategyId, autorun: "1" } });
+}
+function goCompare() {
+  const anchor = pulse.value?.anchor?.symbol || "sh000001";
+  router.push({ name: "backtest", query: { tab: "compare", symbol: anchor, autorun: "1" } });
+}
+async function refreshAll() {
+  await Promise.allSettled([market.refreshAll(), loadPulse()]);
 }
 
 onMounted(async () => {
-  if (!market.stocks.length) await market.refreshAll();
-  if (auth.isLoggedIn && !market.favorites.length) {
-    market.fetchFavorites().catch(() => {});  // K 线自选日期标注依赖
-  }
-  // 补全深链标的名称;无深链时默认上证指数
+  await market.ensureLoaded();
   const qs = String(route.query.symbol || "");
-  const target = market.activeStocks.find((s) => s.symbol === qs)
-    || market.indices.find((i) => i.symbol === qs);
-  if (target) {
-    klineTarget.value = { symbol: target.symbol, name: target.name };
-    if (target.kind !== "index") selected.value = target;
-  } else if (klineTarget.value.symbol === "sh000001") {
-    klineTarget.value = { symbol: "sh000001", name: "上证指数" };
+  if (qs) {
+    const target = resolveTargetName(qs);
+    if (target.name) klineTarget.value = target;
+    if (market.stocks.some((s) => s.symbol === qs)) selectedSymbol.value = qs;
+  } else {
+    klineTarget.value = { symbol: "sh000001", name: resolveTargetName("sh000001").name || "上证指数" };
   }
-  if (!selected.value && market.activeStocks.length) selected.value = market.activeStocks[0];
   loadPulse();
+  loadWatchlist();
   pulseTimer = setInterval(loadPulse, 60000);
+  summaryTimer = setInterval(() => {
+    if (!document.hidden && auth.isLoggedIn) market.fetchFavoritesSummary();
+  }, 60000);
+  if (qs) scrollToKline();
 });
-onUnmounted(() => clearInterval(pulseTimer));
+onUnmounted(() => {
+  clearInterval(pulseTimer);
+  clearInterval(summaryTimer);
+});
 </script>
 
 <template>
   <div class="page">
-    <!-- Hero -->
-    <section class="hero panel-gradient">
-      <div class="hero-inner panel" style="border: none">
-        <div class="hero-text">
-          <h1 class="hero-title">
-            量化研究<em>终端</em><br />先看大盘状态再选策略
-          </h1>
-          <p class="hero-sub">
-            真实行情 · 市场脉冲推断 · 策略有效性对比 · AI 投研助手
-          </p>
-          <div v-if="!auth.isLoggedIn" class="hero-actions">
-            <router-link class="btn btn-primary" :to="{ name: 'register' }">注册开始研究</router-link>
-            <router-link class="btn" :to="{ name: 'login' }">登录</router-link>
-          </div>
-          <div v-else class="hero-actions">
-            <router-link class="btn btn-primary" :to="{ name: 'backtest' }">量化回测</router-link>
-            <router-link class="btn" :to="{ name: 'favorites' }">我的自选</router-link>
-          </div>
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">行情总览</h1>
+        <p class="page-sub">看大盘状态,选当前更合适的策略,再回到 K 线与自选验证。</p>
+      </div>
+      <div class="market-state">
+        <span class="status-dot" :class="sourceClass"></span>
+        <span>{{ sourceText }}</span>
+        <span class="state-time num">{{ updatedText }}</span>
+        <button class="icon-btn" aria-label="刷新行情" title="刷新行情" @click="refreshAll">
+          <AppIcon name="refresh" :size="15" />
+        </button>
+      </div>
+    </div>
+
+    <MarketStatus :pulse="pulse" :loading="pulseLoading" @backtest="goBacktest" @compare="goCompare" />
+
+    <section class="grid-3 section-gap indices">
+      <IndexCard v-for="idx in market.indices" :key="idx.name" :index="idx" @select="selectIndex" />
+      <div v-if="!market.indices.length" class="panel skeleton" style="height: 96px"></div>
+      <div v-if="!market.indices.length" class="panel skeleton" style="height: 96px"></div>
+      <div v-if="!market.indices.length" class="panel skeleton" style="height: 96px"></div>
+    </section>
+
+    <section class="home-grid section-gap">
+      <div id="kline-panel" class="panel chart-panel">
+        <div class="chart-tabs">
+          <button v-if="klineStock" class="btn btn-sm chip chip-on" aria-pressed="true"
+            :aria-label="`当前标的 ${klineStock.name}`" @click="selectStock(klineStock)">
+            {{ klineStock.name }}
+          </button>
+          <button v-for="idx in realIndices" :key="idx.symbol" class="btn btn-sm chip"
+            :class="{ 'chip-on': klineTarget.symbol === idx.symbol }"
+            :aria-pressed="klineTarget.symbol === idx.symbol" @click="selectIndex(idx)">
+            {{ idx.name }}
+          </button>
         </div>
-        <MarketPulse :pulse="pulse" compact />
+        <KlineChart v-if="klineTarget.symbol" :symbol="klineTarget.symbol" :name="klineTarget.name"
+          :height="360" :favorite="isFavorite" :favorite-pending="favoritePending"
+          :favorite-enabled="Boolean(klineStock)" @toggle-favorite="toggleKlineFavorite" />
       </div>
+      <WatchlistRail :summary="market.favoritesSummary" :loading="market.summaryLoading" @select="selectStock" />
     </section>
 
-    <!-- 市场脉冲 -->
-    <section class="section-gap">
-      <MarketPulse :pulse="pulse" />
-    </section>
-
-    <!-- 指数 -->
-    <section class="grid-3 section-gap">
-      <IndexCard v-for="idx in market.indices" :key="idx.name" :index="idx" />
-      <div v-if="!market.indices.length" class="panel skeleton" style="height: 118px"></div>
-      <div v-if="!market.indices.length" class="panel skeleton" style="height: 118px"></div>
-      <div v-if="!market.indices.length" class="panel skeleton" style="height: 118px"></div>
-    </section>
-
-    <!-- K 线 -->
     <section class="panel section-gap">
-      <div class="kline-tabs">
-        <button v-for="idx in realIndices" :key="idx.symbol" class="btn btn-sm kline-chip"
-          :class="{ 'chip-on': klineTarget.symbol === idx.symbol }" @click="selectIndex(idx)">
-          {{ idx.name }}
-        </button>
-        <button v-if="selected" class="btn btn-sm kline-chip"
-          :class="{ 'chip-on': klineTarget.symbol === selected.symbol }"
-          @click="klineTarget = { symbol: selected.symbol, name: selected.name }">
-          {{ selected.name }}
-        </button>
+      <div class="panel-head table-head">
+        <div>
+          <h2 class="panel-title" style="margin: 0">股票列表</h2>
+          <p class="panel-sub">{{ market.activeStocks.length }} 只股票 · 输入名称或代码可添加任意 A 股</p>
+        </div>
+        <SymbolSearch placeholder="搜索代码 / 名称,添加任意股票" @select="selectStock" />
       </div>
-      <KlineChart v-if="klineTarget?.symbol" :symbol="klineTarget.symbol" :name="klineTarget.name" :height="380" />
-      <div v-else class="panel skeleton" style="height: 400px"></div>
-    </section>
-
-    <!-- 标的列表 -->
-    <section class="panel section-gap">
-      <h3 class="panel-title">
-        市场标的
-        <input v-model="search" class="input search" type="search" placeholder="搜索代码 / 名称…" aria-label="搜索标的" />
-      </h3>
-      <StockTable
-        :stocks="filteredStocks"
-        :favorite-ids="market.favoriteStockIds"
-        :selected-symbol="selected?.symbol"
-        @select="selectStock"
-        @toggle-fav="market.toggleFavorite"
-      />
+      <div v-if="market.error && !market.stocks.length" class="empty">
+        <div class="title">行情加载失败</div>
+        <div class="sub">{{ market.error }}</div>
+        <button class="btn btn-sm section-gap" @click="refreshAll">重试</button>
+      </div>
+      <StockTable v-else :stocks="market.activeStocks" :favorite-ids="market.favoriteStockIds"
+        :pending-ids="market.pendingFavoriteIds" :selected-symbol="selectedSymbol"
+        @select="selectStock" @toggle-fav="toggleFavorite" />
     </section>
   </div>
 </template>
 
 <style scoped>
-.hero-inner { display: flex; gap: 28px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.hero-title {
-  font-size: clamp(26px, 4vw, 40px);
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+.market-state { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.state-time { color: var(--text-3); }
+.indices { margin-top: var(--space-4); }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: stretch; }
+.chart-panel { scroll-margin-top: 72px; padding: 16px; }
+.chart-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.chip { background: transparent; }
+.chip-on { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.table-head { align-items: center; }
+.panel-sub { color: var(--text-3); font-size: var(--fs-xs); margin-top: 3px; }
+@media (max-width: 1000px) {
+  .home-grid { grid-template-columns: 1fr; }
 }
-.hero-title em {
-  font-style: normal;
-  background: var(--brand-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.35));
-}
-.hero-sub { color: var(--text-2); margin: 10px 0 18px; }
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.search { max-width: 230px; font-size: 13px; padding: 7px 12px; }
-.kline-tabs { display: flex; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
-.kline-chip.chip-on { border-color: var(--brand-a); color: var(--brand-a); box-shadow: var(--glow-brand); }
 @media (max-width: 900px) {
-  .hero-inner { gap: 16px; }
+  .indices { display: flex; overflow-x: auto; gap: 8px; scrollbar-width: none; }
+  .indices::-webkit-scrollbar { display: none; }
+  .indices :deep(.index-card) { flex: 0 0 176px; }
+}
+@media (max-width: 700px) {
+  .market-state { width: 100%; }
+  .table-head { align-items: flex-start; flex-direction: column; }
+  .table-head :deep(.symbol-search) { width: 100%; }
 }
 </style>

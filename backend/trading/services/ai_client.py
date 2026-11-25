@@ -1,7 +1,7 @@
 """
-AI 助手客户端:
+AI 研究助手客户端:
 - 配置 DEEPSEEK_API_KEY 时调用 DeepSeek(OpenAI 兼容接口);
-- 未配置或调用失败时,自动降级为内置离线模拟回答(结合用户真实持仓/行情数据),保证离线可运行。
+- 未配置或调用失败时,自动降级为内置离线回答(结合用户自选与大盘状态),保证离线可运行。
 """
 import logging
 
@@ -10,33 +10,34 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "你是一个股票量化研究终端的智能助手,用简洁中文回答投资相关问题,给出客观分析,"
-    "并提醒用户行情为模拟/研究用途,不构成投资建议。"
-    "平台提供规则化市场脉冲(regime/广度/波动率分位)与分状态策略有效性数据,回答行情/策略类问题时优先引用上下文中的脉冲与推荐数据。"
+    "你是一个股票量化研究终端的研究助手,用简洁中文回答投资研究问题,给出客观分析,"
+    "并提醒用户内容仅供研究学习,不构成投资建议。"
+    "平台提供规则化大盘状态(趋势/广度/波动率分位)与分行情策略有效性数据,"
+    "回答行情或策略类问题时优先引用上下文中的大盘状态与策略建议。"
 )
 
 GENERIC_TIPS = [
-    "市场有风险,模拟交易虽不涉及真金白银,也是练习纪律的好地方:控制单笔仓位、少动多看。",
-    "可以试试「量化回测」页面:用双均线、MACD 等经典策略在历史 K 线上验证想法,再决定手动跟单。",
-    "下单前先看涨跌停范围与每手股数:主板 100 股一手,科创板 688 开头 200 股一手。",
-    "挂限价单后如果没成交,可以在「持仓 → 当前委托」里撤单改价,或等待行情回到你的价位。",
+    "研究有风险:任何策略都应先看样本外表现与最大回撤,再决定是否参考。",
+    "可以试试「量化回测」页面:用双均线、MACD 等经典策略在历史 K 线上验证想法。",
+    "自选页会记录加入以来的收益,并与同期上证指数对比,方便判断选股是否跑赢大盘。",
+    "策略建议只是在当前行情下的历史统计,不代表未来收益。",
 ]
 
 
 def _favorites_summary(user) -> str:
-    from django.utils import timezone
+    from .watchlist import favorites_summary
 
-    from ..models import Favorite
-
-    favs = Favorite.objects.filter(user=user).select_related("stock")[:8]
-    if not favs:
-        return "你还没有自选股。在行情总览页点击「加自选」建立观察池,K 线会标注加入日期。"
+    data = favorites_summary(user)
+    if not data["count"]:
+        return "你还没有自选标的。在行情总览或自选页输入代码/名称即可加入,K 线会标注加入日期。"
     lines = [
-        f"{f.stock.name}({f.stock.symbol}){timezone.localtime(f.created_at):%Y-%m-%d} 加入自选,"
-        f"现价 {f.stock.price}({f.stock.change_pct:+.2f}%)"
-        for f in favs
+        f"{item['stock'].name}({item['stock'].symbol}) {item['joined_at']} 加入,"
+        f"加入以来 {item['return_pct']:+.2f}%,同期上证 {item['benchmark_return_pct']:+.2f}%,"
+        f"超额 {item['excess_pct']:+.2f}%"
+        for item in data["items"][:8]
     ]
-    return "你的自选股:\n" + "\n".join(lines)
+    return (f"你的自选共 {data['count']} 只,平均加入以来 {data['avg_return_pct']:+.2f}%,"
+            f"跑赢上证 {data['beat_count']}/{data['count']} 只。\n" + "\n".join(lines))
 
 
 def _market_summary() -> str:
@@ -45,17 +46,17 @@ def _market_summary() -> str:
 
     pulse = market_pulse()
     b = pulse["breadth"]
-    head = (f"市场脉冲:{pulse['label']}(评分 {pulse['score']:+.0f}),涨 {b['advance']} 家 / 跌 {b['decline']} 家,"
-            f"平均涨跌幅 {b['avg_change_pct']:+.2f}%。" + ";".join(pulse["evidence"][:3]))
-    stocks = Stock.objects.filter(is_active=True)[:5]
+    head = (f"大盘状态:{pulse['label']}(评分 {pulse['score']:+.0f}),涨 {b['advance']} 家 / "
+            f"跌 {b['decline']} 家,平均涨跌幅 {b['avg_change_pct']:+.2f}%。" + ";".join(pulse["evidence"][:3]))
+    stocks = Stock.objects.filter(kind=Stock.Kind.STOCK, is_active=True)[:5]
     parts = [f"{s.name} {s.price}({s.change_pct:+.2f}%)" for s in stocks]
     return head + ("\n近期标的一览:" + ";".join(parts) if parts else "")
 
 
 def mock_reply(user, text: str) -> str:
-    """离线模拟回答:按关键词路由,结合真实账户数据生成内容。"""
+    """离线回答:按关键词路由,结合真实自选与大盘数据生成内容。"""
     t = text.lower()
-    if any(k in t for k in ("自选", "关注", "持仓", "账户", "观察池")):
+    if any(k in t for k in ("自选", "关注", "观察池", "跑赢")):
         return _favorites_summary(user)
     if any(k in t for k in ("行情", "大盘", "涨跌", "走势", "指数")):
         return _market_summary()
@@ -63,11 +64,12 @@ def mock_reply(user, text: str) -> str:
         return (
             "平台内置 4 个可回测策略:双均线交叉、MACD 金叉死叉、RSI 均值回归、布林带突破。"
             "到「量化回测」页选择策略与参数即可在历史 K 线上验证;回测为次日开盘成交、计入佣金与印花税。"
+            "「策略对比」会按当前行情状态统计各策略的历史表现,并给出样本外结果。"
         )
     if any(k in t for k in ("怎么", "如何", "用", "流程")):
         return (
-            "使用流程:行情总览看市场脉冲与指数 → 加自选建立观察池(K 线标注加入日期)→ "
-            "量化回测页跑单策略或「策略有效性对比」→ 参考当前大盘状态的适用策略推荐。"
+            "使用流程:行情总览看大盘状态与策略建议 → 加自选建立观察池(K 线标注加入日期、自选页跟踪超额收益)→ "
+            "量化回测页跑单策略或「策略有效性对比」→ 回到大盘状态查看当前行情更适合的策略。"
         )
     import random
 
@@ -83,7 +85,7 @@ def _call_deepseek(text: str, history) -> str:
 
     p = market_pulse()
     messages.append({"role": "system", "content": (
-        f"当前市场脉冲(规则化推断,供参考):{p['label']} 评分 {p['score']};"
+        f"当前大盘状态(规则化推断,供参考):{p['label']} 评分 {p['score']};"
         f"涨 {p['breadth']['advance']} 家 / 跌 {p['breadth']['decline']} 家;" + ";".join(p["evidence"][:4])
     )})
     for msg in history[-10:]:
